@@ -1,9 +1,14 @@
-// Vice Cover Studio editor, round 3: state, photo library, panel
+// Vice Cover Studio editor, round 4: state, photo library, panel
 // picking and dragging, caption, grade and poster-furniture controls.
 // The cover itself is drawn by render.js; this file only wires the
 // editor around it.
 //
-// Round 3:
+// Round 4:
+//  - Twelve sample photos: the two kit photos plus six fictional cast
+//    portraits and four scene photos (red sports car, palm skyline,
+//    helicopter, neon motel), all generated in-session for this round.
+//    The default cover is the Title Band layout with five different
+//    faces plus the helicopter and the sports car.
 //  - Per-panel crop: every panel keeps its own zoom + pan, edited with
 //    the picked panel's sliders or by dragging, and remembered per
 //    (panel, photo) — switch a panel's photo away and back and its crop
@@ -11,10 +16,14 @@
 //  - Face-aware auto-crop ("Jaga wajah"): the sample photos carry a
 //    measured face anchor; one click centres that face in the picked
 //    panel. Uploaded photos have no anchor and fall back to the photo's
-//    focal centre.
+//    focal centre. Scene photos have no face and fall back the same way.
 //  - Auto cast tag: a panel's role comes from its photo's role pool by
 //    the panel's position — the hero is the lead, the rest follow in
-//    reading order. A role you typed yourself is never overwritten.
+//    reading order. Scene panels get location tags (AIR SUPPORT, THE
+//    GETAWAY…) instead of cast roles. A role you typed yourself is
+//    never overwritten.
+//  - Stacked two-line title: the giant title can split across two
+//    lines, which fits narrow formats better.
 import { LAYOUTS, LAYOUT_IDS, layoutById, panelRects, panelPolys, panelAt, drawOrder, roleRanks } from './layouts.js';
 import { drawCover, exportCover, GRADES, GRADE_IDS, gradeById } from './render.js';
 
@@ -25,9 +34,11 @@ export const EXPORT_SIZES = [
 ];
 
 // The built-in photos, with a face anchor measured from the photo
-// itself (normalised x/y/w/h of the face box). The face-aware crop
-// centres this box in a panel; without an anchor a photo falls back to
-// its focal centre (0.5, 0.5).
+// itself (normalised x/y/w/h of the face box, forehead to chin). The
+// face-aware crop centres the anchor's `aim` point — the midpoint
+// between the eyes and the mouth — in a panel; without an anchor a
+// photo falls back to its focal centre (0.5, 0.5). Scene photos have
+// no face, so they have no anchor.
 const SAMPLES = [
   // pier.jpg 720x720: the fisherman, bucket hat, face x 0.15-0.50,
   // y 0.03-0.38 (hat included, it is part of his look).
@@ -35,11 +46,47 @@ const SAMPLES = [
   // boulevard.jpg 544x720: the woman in sunglasses, face x 0.30-0.62,
   // y 0.09-0.35.
   { id: 'boulevard', name: 'Boulevard', src: 'samples/boulevard.jpg', face: { x: 0.30, y: 0.09, w: 0.32, h: 0.26 } },
+  // cast-mara.jpg 960x1440: curly-haired woman, gold hoop earrings,
+  // olive shirt; face x 0.28-0.72, y 0.24-0.62; eyes 0.385,
+  // mouth 0.55, aim 0.47.
+  { id: 'cast-mara', name: 'Mara · the Queen', src: 'samples/cast-mara.jpg', face: { x: 0.28, y: 0.24, w: 0.44, h: 0.38, aim: 0.47 } },
+  // cast-dario.jpg 960x1440: slicked-back dark hair, light stubble,
+  // black leather jacket; face x 0.13-0.87, y 0.15-0.66; eyes 0.355,
+  // mouth 0.56, aim 0.46.
+  { id: 'cast-dario', name: 'Dario · the Driver', src: 'samples/cast-dario.jpg', face: { x: 0.13, y: 0.15, w: 0.74, h: 0.51, aim: 0.46 } },
+  // cast-ines.jpg 960x1440: straight auburn hair, cream silk blouse;
+  // face x 0.22-0.78, y 0.15-0.60; eyes 0.35, mouth 0.50, aim 0.43.
+  { id: 'cast-ines', name: 'Ines · the Insider', src: 'samples/cast-ines.jpg', face: { x: 0.22, y: 0.15, w: 0.56, h: 0.45, aim: 0.43 } },
+  // cast-otto.jpg 960x1440: older man, grey beard, canvas bucket hat.
+  // The anchor is the FACE only (x 0.13-0.83, y 0.26-0.72): the hat
+  // sits well above it, and the face itself is low in the frame —
+  // eyes 0.37, mouth 0.565, aim 0.47. Including the hat in the box
+  // would push the mouth out of a short panel.
+  { id: 'cast-otto', name: 'Otto · the Boss', src: 'samples/cast-otto.jpg', face: { x: 0.13, y: 0.26, w: 0.70, h: 0.46, aim: 0.47 } },
+  // cast-kai.jpg 960x1440: young man, dark sunglasses, black t-shirt,
+  // gold chain; face x 0.14-0.83, y 0.17-0.66; glasses 0.38,
+  // mouth 0.555, aim 0.47.
+  { id: 'cast-kai', name: 'Kai · the Kid', src: 'samples/cast-kai.jpg', face: { x: 0.14, y: 0.17, w: 0.69, h: 0.49, aim: 0.47 } },
+  // cast-rosa.jpg 960x1440: silver-streaked hair tied back, red
+  // lipstick, dark blazer; face x 0.22-0.80, y 0.17-0.63; eyes 0.35,
+  // mouth 0.53, aim 0.44.
+  { id: 'cast-rosa', name: 'Rosa · the Matriarch', src: 'samples/cast-rosa.jpg', face: { x: 0.22, y: 0.17, w: 0.58, h: 0.46, aim: 0.44 } },
+  // scene-car.jpg 1440x960: red 80s sports car on the coast highway.
+  { id: 'scene-car', name: 'Red sports car', src: 'samples/scene-car.jpg', face: null },
+  // scene-skyline.jpg 1440x960: palm-lined coastal skyline at dusk.
+  { id: 'scene-skyline', name: 'Night skyline', src: 'samples/scene-skyline.jpg', face: null },
+  // scene-chopper.jpg 1440x960: helicopter over the coastal city.
+  { id: 'scene-chopper', name: 'Helicopter', src: 'samples/scene-chopper.jpg', face: null },
+  // scene-motel.jpg 1440x960: neon motel at night.
+  { id: 'scene-motel', name: 'Neon motel', src: 'samples/scene-motel.jpg', face: null },
 ];
 
 // Cast roles per sample photo, with a sub-line (place · time · note) for
 // each. The auto cast tag hands them out in panel-position order (see
-// assignRolesByPosition), so the cast never repeats a name.
+// assignRolesByPosition), so the cast never repeats a name. The role
+// pools are disjoint across photos: no two photos share a role, so a
+// cover can never show the same role twice. Scene photos get location
+// tags instead of cast roles.
 const ROLE_POOLS = {
   pier: [
     { role: 'THE CAPTAIN', sub: 'PIER 9 · 6:40 PM · FIRST CAST' },
@@ -47,61 +94,114 @@ const ROLE_POOLS = {
     { role: 'THE SAILOR', sub: 'THE HARBOR · 7:15 PM · NO WAY BACK' },
   ],
   boulevard: [
-    { role: 'THE QUEEN', sub: 'BOULEVARD · GOLDEN HOUR · TOP DOWN' },
-    { role: 'THE DRIVER', sub: 'OCEAN DRIVE · 6:42 PM · FULL THROTTLE' },
+    { role: 'THE STARLET', sub: 'BOULEVARD · GOLDEN HOUR · TOP DOWN' },
+    { role: 'THE WHEELMAN', sub: 'PALM ROW · 7:30 PM · DRIVES THE NIGHT' },
+    { role: 'THE FIXER', sub: 'DOWNTOWN · 8:15 PM · MAKES IT DISAPPEAR' },
+  ],
+  'cast-mara': [
+    { role: 'THE QUEEN', sub: 'OCEAN DRIVE · 6:40 PM · RUNS THE STRIP' },
+    { role: 'THE LOOKOUT', sub: 'ROOFTOP · 7:20 PM · SEES EVERYTHING' },
+    { role: 'THE RUNNER', sub: 'OCEAN DRIVE · 6:15 PM · NEVER STOPS' },
+  ],
+  'cast-dario': [
+    { role: 'THE DRIVER', sub: 'COAST HIGHWAY · 6:42 PM · FULL THROTTLE' },
+    { role: 'THE MECHANIC', sub: 'THE GARAGE · 5:30 PM · FIXES ANYTHING' },
+    { role: 'THE MUSCLE', sub: 'THE DOCKS · 8:10 PM · NO QUESTIONS' },
+  ],
+  'cast-ines': [
     { role: 'THE INSIDER', sub: 'PALM ROW · 8:40 PM · KNOWS EVERYTHING' },
+    { role: 'THE ACCOUNTANT', sub: 'DOWNTOWN · 9:00 AM · COUNTS IT ALL' },
+    { role: 'THE PLANNER', sub: 'THE PENTHOUSE · 7:45 PM · EVERY MOVE' },
+  ],
+  'cast-otto': [
+    { role: 'THE BOSS', sub: 'THE HARBOR · 7:15 PM · NO WAY BACK' },
+    { role: 'THE OLD HAND', sub: 'PIER 9 · 5:45 AM · FIRST CAST' },
+    { role: 'THE PATRIARCH', sub: 'THE HARBOR · 6:00 PM · BUILT THIS COAST' },
+  ],
+  'cast-kai': [
+    { role: 'THE KID', sub: 'BOARDWALK · 7:05 PM · NEVER WALKS' },
+    { role: 'THE RACER', sub: 'COAST HIGHWAY · 6:58 PM · FASTEST ALIVE' },
+    { role: 'THE PICKPOCKET', sub: 'THE STRIP · 9:15 PM · LIGHT FINGERS' },
+  ],
+  'cast-rosa': [
+    { role: 'THE MATRIARCH', sub: 'ROOFTOP · 6:30 PM · HOLDS THE FAMILY' },
+    { role: 'THE DEALER', sub: 'THE BACK ROOM · 8:00 PM · NAME YOUR PRICE' },
+    { role: 'THE SIREN', sub: 'THE LOUNGE · 10:20 PM · ONE SONG' },
+  ],
+  'scene-car': [
+    { role: 'THE GETAWAY', sub: 'COAST HIGHWAY · 6:55 PM · ENGINE RUNNING' },
+    { role: 'THE CHASE', sub: 'OCEAN DRIVE · 7:10 PM · NO BRAKES' },
+    { role: 'THE RIDE', sub: 'THE STRIP · 6:50 PM · TOP DOWN' },
+  ],
+  'scene-skyline': [
+    { role: 'NIGHT SKYLINE', sub: 'THE BAY · DUSK · CITY OF LIGHTS' },
+    { role: 'VICE COAST', sub: 'THE WATERFRONT · SUNSET · HOME' },
+    { role: 'PALM ROW', sub: 'THE BOULEVARD · DUSK · NEON ROW' },
+  ],
+  'scene-chopper': [
+    { role: 'AIR SUPPORT', sub: 'ABOVE THE COAST · SUNSET · EYES IN THE SKY' },
+    { role: 'THE CHOPPER', sub: 'ABOVE THE BAY · DUSK · ROTORS HOT' },
+    { role: 'EYES IN THE SKY', sub: 'HIGH ABOVE · SUNSET · SEES ALL' },
+  ],
+  'scene-motel': [
+    { role: 'THE MOTEL', sub: 'NEON ROW · MIDNIGHT · ROOM 9' },
+    { role: 'NEON ROW', sub: 'THE STRIP · 11:40 PM · VACANCY' },
+    { role: 'ROOM 9', sub: 'SECOND FLOOR · 2:00 AM · DO NOT KNOCK' },
   ],
 };
 const UPLOAD_ROLE = { role: 'THE CREW', sub: 'YOUR PHOTO · RIGHT NOW' };
 
-// Six default slots: each one frames a different part of its photo, so
-// the two sample photos read as different shots across the cast.
-// Framing: oy moves the photo, so a positive oy shows the TOP of the
-// photo (where the faces are); ox positive shows its left side.
+// Seven default slots for the Title Band layout: five different faces
+// plus the helicopter and the red sports car — no photo repeats. The
+// face crops come from the face-aware crop at 1920x1080 (the face
+// centred in its panel); the helicopter is zoomed in so it sits near
+// the panel's centre, and the car is framed to show the whole car
+// under the sunset sky.
 const DEFAULT_PANELS = [
-  { photo: 'pier', zoom: 1.6, ox: 0.05, oy: 0.5, role: 'THE CAPTAIN', sub: 'PIER 9 · 6:40 PM · FIRST CAST' },
-  { photo: 'boulevard', zoom: 1.5, ox: 0, oy: 0.5, role: 'THE QUEEN', sub: 'BOULEVARD · GOLDEN HOUR · TOP DOWN' },
-  { photo: 'pier', zoom: 2.0, ox: 0.35, oy: 0.75, role: 'THE ANGLER', sub: 'PIER 9 · 5:45 AM · LAST CAST' },
-  { photo: 'boulevard', zoom: 1.9, ox: 0.2, oy: 0.85, role: 'THE DRIVER', sub: 'OCEAN DRIVE · 6:42 PM · FULL THROTTLE' },
-  { photo: 'pier', zoom: 1.4, ox: 0, oy: -0.15, role: 'THE SAILOR', sub: 'THE HARBOR · 7:15 PM · NO WAY BACK' },
-  { photo: 'boulevard', zoom: 1.7, ox: -0.28, oy: 0.8, role: 'THE INSIDER', sub: 'PALM ROW · 8:40 PM · KNOWS EVERYTHING' },
+  { photo: 'cast-mara', zoom: 1.25, ox: 0, oy: 0.15, role: 'THE QUEEN', sub: 'OCEAN DRIVE · 6:40 PM · RUNS THE STRIP' },
+  { photo: 'cast-otto', zoom: 1, ox: 0, oy: 0.12, role: 'THE BOSS', sub: 'THE HARBOR · 7:15 PM · NO WAY BACK' },
+  { photo: 'cast-ines', zoom: 1, ox: 0, oy: 0.27, role: 'THE INSIDER', sub: 'PALM ROW · 8:40 PM · KNOWS EVERYTHING' },
+  { photo: 'cast-dario', zoom: 1, ox: 0, oy: 0.09, role: 'THE DRIVER', sub: 'COAST HIGHWAY · 6:42 PM · FULL THROTTLE' },
+  { photo: 'cast-kai', zoom: 1, ox: 0, oy: 0.07, role: 'THE KID', sub: 'BOARDWALK · 7:05 PM · NEVER WALKS' },
+  { photo: 'scene-chopper', zoom: 1.6, ox: 0, oy: 0.3, role: 'AIR SUPPORT', sub: 'ABOVE THE COAST · SUNSET · EYES IN THE SKY' },
+  { photo: 'scene-car', zoom: 1.2, ox: 0, oy: -0.06, role: 'THE GETAWAY', sub: 'COAST HIGHWAY · 6:55 PM · ENGINE RUNNING' },
 ];
 
 const CAPTIONS = [
-  'Sunset Heist', 'Boulevard Queen', 'Vice Nights', 'Palm Fever',
-  'Neon Harbor', 'Golden Hour Run', 'Salt & Neon', 'Last Sunset',
+  'Sunset Heat', 'Vice Nights', 'Coast Heat', 'Harbor Lights',
+  'Golden Hour Run', 'Salt & Neon', 'Last Sunset', 'Boulevard Queen',
 ];
 const SCRIPTS = [
-  'chasing golden hour', 'one last summer', 'salt air stories',
-  'golden hour run', 'vice city nights', 'no way back',
-  'after the tide', 'one more sunset',
+  'chasing the last light', 'salt air stories', 'golden hour run',
+  'vice city nights', 'no way back', 'after the tide',
+  'one more sunset', 'heat on the coast',
 ];
 const TAGLINES = [
-  'ONE PIER · ONE BOULEVARD · NO WAY BACK',
-  'FIVE FRIENDS · ONE COAST · NO WAY BACK',
+  'FIVE FACES · ONE HARBOR · NO CURFEW',
+  'SEVEN SHOTS · ONE SUNSET · NO WAY BACK',
   'ONE COAST · SIX STORIES · NO CURFEW',
   'SEVEN LIVES · ONE HARBOR · NO WAY BACK',
-  'TWO PHOTOS · ONE SUNSET · NO WAY BACK',
 ];
 
 const state = {
-  layout: 'cast',
-  caption: 'Sunset Heist',
-  script: 'chasing golden hour',
+  layout: 'titleband',
+  caption: 'Sunset Heat',
+  script: 'chasing the last light',
   captionSize: 1,
-  gradeId: 'sunset',
+  titleStacked: false,
+  gradeId: 'duotone',
   grade: 0.8,
   grain: 0.5,
-  halftone: true,
+  halftone: false,
   ink: false,
   furniture: true,
   quote: 'SUNSET, CRIME AND SALT AIR',
   quoteSource: 'THE COAST GAZETTE',
-  tagline: 'ONE PIER · ONE BOULEVARD · NO WAY BACK',
+  tagline: 'FIVE FACES · ONE HARBOR · NO CURFEW',
   billing: 'A VICE COVER PICTURES PRODUCTION · STARRING YOU · SHOT ON YOUR OWN CAMERA · GRADED BY HAND',
   vol: 'VOL. 01',
   release: 'COMING SOON',
-  heat: 4,
+  heat: 0,
   seal: true,
   barcode: true,
   panels: DEFAULT_PANELS.map((p) => ({ ...p })),
@@ -114,9 +214,13 @@ let selectedPanel = 0;
 let previewSize = { w: 1080, h: 1080 };
 let renderQueued = false;
 
-// Per-panel crop memory: key `${panelIndex}:${photoId}` -> { zoom, ox,
-// oy }. A panel's crop belongs to the (panel, photo) pair, so changing
-// a panel's photo and changing it back restores the crop it had.
+// Per-panel crop memory: key `${panelIndex}:${photoId}:${layoutId}` ->
+// { zoom, ox, oy, auto }. A panel's crop belongs to the (panel, photo,
+// layout) triple — the same photo frames differently in a wide strip
+// than in a tall hero panel — so changing a panel's photo and changing
+// it back, or switching layouts and switching back, restores the crop
+// it had. `auto` marks a face-aware crop (re-framed on layout switch);
+// a hand-adjusted crop keeps auto false and is never re-framed.
 const cropStore = new Map();
 
 const $ = (id) => document.getElementById(id);
@@ -126,13 +230,13 @@ function panelCount() {
 }
 
 function cropKey(index, photoId) {
-  return `${index}:${photoId}`;
+  return `${index}:${photoId}:${state.layout}`;
 }
 
 function saveCrop(index) {
   const slot = state.panels[index];
   if (!slot) return;
-  cropStore.set(cropKey(index, slot.photo), { zoom: slot.zoom, ox: slot.ox, oy: slot.oy });
+  cropStore.set(cropKey(index, slot.photo), { zoom: slot.zoom, ox: slot.ox, oy: slot.oy, auto: slot.autoCrop !== false });
 }
 
 function clampCrop(crop) {
@@ -150,27 +254,34 @@ function setCrop(index, crop) {
   slot.zoom = c.zoom;
   slot.ox = c.ox;
   slot.oy = c.oy;
+  slot.autoCrop = crop.auto !== false;
   saveCrop(index);
 }
 
 // ---- Face-aware auto-crop -------------------------------------------------
-// The crop that puts a photo's face anchor (or, with no anchor, its
-// focal centre) in the middle of panel `index`, zoomed so the face
-// spans about half the panel's width. The pan is clamped with the same
-// limits the renderer uses, so the face lands as close to the centre
-// as the photo's coverage allows.
+// The crop that puts a photo's face in panel `index`, zoomed so the
+// face spans about half the panel's width. Vertically it centres the
+// anchor's `aim` point — the midpoint between the eyes and the mouth —
+// not the face-box centre: a face box runs forehead-to-chin, so its
+// centre sits above the eyes-to-mouth band, and centring the box in a
+// wide, short panel pushes the mouth below the panel's bottom edge.
+// The pan is clamped with the same limits the renderer uses, so the
+// aim lands as close to the centre as the photo's coverage allows.
+// The returned crop is an AUTO crop: switching layouts re-frames it
+// for the new panel shapes, while a crop the user adjusted by hand
+// (drag, wheel, sliders) is kept exactly as left (see setLayout).
 function faceCropFor(index, w = previewSize.w, h = previewSize.h) {
   const slot = state.panels[index];
   const entry = slot ? photos.get(slot.photo) : null;
   const rect = panelRects(state.layout, w, h)[index];
-  if (!slot || !entry || !rect) return { zoom: 1.3, ox: 0, oy: 0, anchor: 'none' };
+  if (!slot || !entry || !rect) return { zoom: 1.3, ox: 0, oy: 0, anchor: 'none', auto: true };
   const img = entry.img;
   const iw = img.naturalWidth || img.width;
   const ih = img.naturalHeight || img.height;
-  if (!iw || !ih) return { zoom: 1.3, ox: 0, oy: 0, anchor: 'none' };
+  if (!iw || !ih) return { zoom: 1.3, ox: 0, oy: 0, anchor: 'none', auto: true };
   const face = entry.face || null;
   const cx = face ? face.x + face.w / 2 : 0.5;
-  const cy = face ? face.y + face.h / 2 : 0.5;
+  const ay = face && Number.isFinite(face.aim) ? face.aim : (face ? face.y + face.h / 2 : 0.5);
   const fw = face ? face.w : 0.25;
   const base = Math.max(rect.w / iw, rect.h / ih);
   let zoom = (0.55 * rect.w) / (fw * iw * base);
@@ -181,8 +292,8 @@ function faceCropFor(index, w = previewSize.w, h = previewSize.h) {
   const maxOx = Math.max(0, (dw - rect.w) / 2 / rect.w);
   const maxOy = Math.max(0, (dh - rect.h) / 2 / rect.h);
   const ox = Math.max(-maxOx, Math.min(maxOx, (dw * (0.5 - cx)) / rect.w));
-  const oy = Math.max(-maxOy, Math.min(maxOy, (dh * (0.5 - cy)) / rect.h));
-  return { zoom, ox, oy, anchor: face ? 'face' : 'focal' };
+  const oy = Math.max(-maxOy, Math.min(maxOy, (dh * (0.5 - ay)) / rect.h));
+  return { zoom, ox, oy, anchor: face ? 'face' : 'focal', auto: true };
 }
 
 function applyFaceCrop(index) {
@@ -261,6 +372,7 @@ function setPanelPhoto(index, photoId) {
     slot.zoom = stored.zoom;
     slot.ox = stored.ox;
     slot.oy = stored.oy;
+    slot.autoCrop = stored.auto !== false;
   } else {
     // First time this photo is on this panel: frame its face (or its
     // centre, for a photo with no face anchor).
@@ -268,6 +380,7 @@ function setPanelPhoto(index, photoId) {
     slot.zoom = c.zoom;
     slot.ox = c.ox;
     slot.oy = c.oy;
+    slot.autoCrop = true;
     saveCrop(index);
   }
   assignRolesByPosition();
@@ -276,6 +389,20 @@ function setPanelPhoto(index, photoId) {
 function setLayout(layoutId) {
   state.layout = layoutById(layoutId).id;
   if (selectedPanel >= panelCount()) selectedPanel = 0;
+  // Auto (face-aware) crops were framed for the previous layout's
+  // panel shapes; re-frame them for the new shapes, so a face that
+  // was centred on its eyes-to-mouth aim stays centred. A crop the
+  // user adjusted by hand (drag, wheel, sliders) is never re-framed.
+  state.panels.forEach((slot, i) => {
+    if (slot && slot.autoCrop !== false) {
+      const c = faceCropFor(i);
+      slot.zoom = c.zoom;
+      slot.ox = c.ox;
+      slot.oy = c.oy;
+      slot.autoCrop = true;
+      saveCrop(i);
+    }
+  });
   assignRolesByPosition();
   syncLayoutButtons();
   syncPanelList();
@@ -458,8 +585,6 @@ function syncFurnitureInputs() {
   set('volInput', state.vol);
   const release = $('releaseSelect');
   if (release) release.value = state.release;
-  const heat = $('heatSelect');
-  if (heat) heat.value = String(state.heat);
   const seal = $('sealCheck');
   if (seal) seal.checked = state.seal !== false;
   const barcode = $('barcodeCheck');
@@ -559,6 +684,7 @@ window.__faceCrop = function (i) {
     state.panels[i].zoom = c.zoom;
     state.panels[i].ox = c.ox;
     state.panels[i].oy = c.oy;
+    state.panels[i].autoCrop = true;
     saveCrop(i);
     syncCropSliders();
     queueRender();
@@ -585,6 +711,7 @@ window.__faceScreen = function (i, w = previewSize.w, h = previewSize.h) {
   const face = entry.face || null;
   const cx = face ? face.x + face.w / 2 : 0.5;
   const cy = face ? face.y + face.h / 2 : 0.5;
+  const ay = face && Number.isFinite(face.aim) ? face.aim : cy;
   const base = Math.max(rect.w / iw, rect.h / ih);
   const scale = base * (slot.zoom || 1);
   const dw = iw * scale;
@@ -597,15 +724,18 @@ window.__faceScreen = function (i, w = previewSize.w, h = previewSize.h) {
   const dy = rect.y + (rect.h - dh) / 2 + oy * rect.h;
   const faceX = dx + cx * dw;
   const faceY = dy + cy * dh;
+  const aimY = dy + ay * dh;
   return {
     anchor: face ? 'face' : 'focal',
     faceX,
     faceY,
+    aimY,
     panel: rect,
     inside: faceX >= rect.x && faceX <= rect.x + rect.w
       && faceY >= rect.y && faceY <= rect.y + rect.h,
     offsetX: (faceX - (rect.x + rect.w / 2)) / rect.w,
     offsetY: (faceY - (rect.y + rect.h / 2)) / rect.h,
+    aimOffsetY: (aimY - (rect.y + rect.h / 2)) / rect.h,
   };
 };
 
@@ -617,15 +747,21 @@ function surpriseMe() {
   state.caption = pick(CAPTIONS);
   state.script = pick(SCRIPTS);
   state.tagline = pick(TAGLINES);
+  state.titleStacked = Math.random() < 0.3;
   state.furniture = true;
-  // Shuffle the cast: alternate the two sample photos across the panels
-  // with fresh crops, so the same photos read as new shots.
+  // Shuffle the cast: a random sample photo on every panel, framed on
+  // its face (or its centre, for a scene photo), so the same photos
+  // read as new shots.
   state.panels.forEach((slot, i) => {
-    const photo = i % 2 === 0 ? 'pier' : 'boulevard';
+    const photo = pick(SAMPLES).id;
     slot.photo = photo;
-    slot.zoom = 1.3 + Math.random() * 1.1;
-    slot.ox = (Math.random() - 0.5) * 0.6;
-    slot.oy = (Math.random() - 0.5) * 0.5;
+    slot.role = '';
+    slot.sub = '';
+    const c = faceCropFor(i);
+    slot.zoom = c.zoom;
+    slot.ox = c.ox;
+    slot.oy = c.oy;
+    slot.autoCrop = true;
     saveCrop(i);
   });
   assignRolesByPosition();
@@ -641,6 +777,8 @@ function surpriseMe() {
   if (cap) cap.value = state.caption;
   const sub = $('subInput');
   if (sub) sub.value = state.script;
+  const stacked = $('stackedCheck');
+  if (stacked) stacked.checked = state.titleStacked;
   setStatus(`Surprise! ${layoutById(state.layout).name} · ${gradeById(state.gradeId).name} · “${state.caption}”.`);
   queueRender();
 }
@@ -688,6 +826,7 @@ function bindPreview() {
     if (!r) return;
     slot.ox = Math.max(-0.8, Math.min(0.8, slot.ox + ((event.clientX - lastX) / box.width) * (canvas.width / r.w)));
     slot.oy = Math.max(-0.8, Math.min(0.8, slot.oy + ((event.clientY - lastY) / box.height) * (canvas.height / r.h)));
+    slot.autoCrop = false;
     lastX = event.clientX;
     lastY = event.clientY;
     syncCropSliders();
@@ -706,6 +845,7 @@ function bindPreview() {
     const slot = state.panels[selectedPanel];
     if (!slot) return;
     slot.zoom = Math.max(1, Math.min(3, slot.zoom * (1 - event.deltaY * 0.001)));
+    slot.autoCrop = false;
     saveCrop(selectedPanel);
     syncCropSliders();
     queueRender();
@@ -727,6 +867,7 @@ function bindControls() {
       const slot = state.panels[selectedPanel];
       if (!slot) return;
       slot.zoom = Number(zoom.value);
+      slot.autoCrop = false;
       saveCrop(selectedPanel);
       syncCropSliders();
       queueRender();
@@ -738,6 +879,7 @@ function bindControls() {
       const slot = state.panels[selectedPanel];
       if (!slot) return;
       slot.ox = Number(oxRange.value);
+      slot.autoCrop = false;
       saveCrop(selectedPanel);
       syncCropSliders();
       queueRender();
@@ -749,6 +891,7 @@ function bindControls() {
       const slot = state.panels[selectedPanel];
       if (!slot) return;
       slot.oy = Number(oyRange.value);
+      slot.autoCrop = false;
       saveCrop(selectedPanel);
       syncCropSliders();
       queueRender();
@@ -799,6 +942,13 @@ function bindControls() {
       state.captionSize = Number(capSize.value);
       const label = $('capSizeValue');
       if (label) label.textContent = `${state.captionSize.toFixed(2)}×`;
+      queueRender();
+    });
+  }
+  const stacked = $('stackedCheck');
+  if (stacked) {
+    stacked.addEventListener('change', () => {
+      state.titleStacked = stacked.checked;
       queueRender();
     });
   }
@@ -874,13 +1024,6 @@ function bindControls() {
       queueRender();
     });
   }
-  const heat = $('heatSelect');
-  if (heat) {
-    heat.addEventListener('change', () => {
-      state.heat = Number(heat.value);
-      queueRender();
-    });
-  }
   const seal = $('sealCheck');
   if (seal) {
     seal.addEventListener('change', () => {
@@ -949,6 +1092,8 @@ function applyQuery() {
   if (q.get('gradeId') && GRADES[q.get('gradeId')]) state.gradeId = q.get('gradeId');
   if (q.get('furniture') === '0') state.furniture = false;
   if (q.get('ink') === '1') state.ink = true;
+  if (q.get('stacked') === '1') state.titleStacked = true;
+  if (q.get('stacked') === '0') state.titleStacked = false;
   if (q.get('quote') !== null) state.quote = q.get('quote');
   if (q.get('quoteSource') !== null) state.quoteSource = q.get('quoteSource');
   if (q.get('tagline') !== null) state.tagline = q.get('tagline');
@@ -986,9 +1131,9 @@ function applyQuery() {
     const ox = oxList[i] === undefined || oxList[i] === '' ? NaN : Number(oxList[i]);
     const oy = oyList[i] === undefined || oyList[i] === '' ? NaN : Number(oyList[i]);
     const zm = zoomList[i] === undefined || zoomList[i] === '' ? NaN : Number(zoomList[i]);
-    if (Number.isFinite(ox)) slot.ox = Math.max(-0.8, Math.min(0.8, ox));
-    if (Number.isFinite(oy)) slot.oy = Math.max(-0.8, Math.min(0.8, oy));
-    if (Number.isFinite(zm)) slot.zoom = Math.max(1, Math.min(3, zm));
+    if (Number.isFinite(ox)) { slot.ox = Math.max(-0.8, Math.min(0.8, ox)); slot.autoCrop = false; }
+    if (Number.isFinite(oy)) { slot.oy = Math.max(-0.8, Math.min(0.8, oy)); slot.autoCrop = false; }
+    if (Number.isFinite(zm)) { slot.zoom = Math.max(1, Math.min(3, zm)); slot.autoCrop = false; }
   });
   // A deep link can also ask for the face-aware crop on some panels,
   // e.g. facecrop=0,2 — the face anchor (or focal centre) is centred
@@ -1001,6 +1146,7 @@ function applyQuery() {
         state.panels[i].zoom = c.zoom;
         state.panels[i].ox = c.ox;
         state.panels[i].oy = c.oy;
+        state.panels[i].autoCrop = true;
       }
     });
   }
@@ -1058,6 +1204,8 @@ async function boot() {
     if (cap) cap.value = state.caption;
     const sub = $('subInput');
     if (sub) sub.value = state.script;
+    const stacked = $('stackedCheck');
+    if (stacked) stacked.checked = !!state.titleStacked;
     queueRender();
   }
   window.__viceReady = true;

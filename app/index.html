@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Cover Studio — per-panel crop, face-aware auto-crop, auto cast tags &amp; sunset sky glow</title>
+<title>Vice Cover Studio — Title Band, Sunset Duotone, 6 new cast portraits &amp; scene photos</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -13,7 +13,7 @@
     <div class="brand">
       <span class="brand-mark">VICE</span>
       <span class="brand-name">Cover Studio</span>
-      <span class="brand-sub">Movie-poster covers · per-panel crop, face-aware auto-crop, auto cast tags, sunset sky glow · 6 layouts, 6 grades · works offline</span>
+      <span class="brand-sub">Movie-poster covers · Title Band layout, Sunset Duotone grade, 6 new cast portraits &amp; 4 scene photos · 7 layouts, 7 grades · works offline</span>
     </div>
     <div class="steps">1 · Pick photos &nbsp;→&nbsp; 2 · Pick a layout &nbsp;→&nbsp; 3 · Export PNG</div>
   </header>
@@ -40,14 +40,15 @@
       <section class="group">
         <h2>Layout</h2>
         <div id="layoutRow" class="row grid3">
-          <button type="button" data-layout="cast" class="active">Poster Cast</button>
+          <button type="button" data-layout="titleband" class="active">Title Band</button>
+          <button type="button" data-layout="cast">Poster Cast</button>
           <button type="button" data-layout="popout">Pop-Out Hero</button>
           <button type="button" data-layout="slant">Slanted Cast</button>
           <button type="button" data-layout="hero">Hero Split</button>
           <button type="button" data-layout="strip">Triple Strip</button>
           <button type="button" data-layout="duo">Neon Duo</button>
         </div>
-        <p id="layoutBlurb" class="blurb">Six slanted panels, one pop-out hero — the movie-poster cast.</p>
+        <p id="layoutBlurb" class="blurb">Seven panels around a full-width title band — the one-sheet poster.</p>
       </section>
 
       <section class="group">
@@ -58,10 +59,10 @@
         <button type="button" id="uploadBtn" class="upload">+ Add your own photo…</button>
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
         <label class="field-label" for="roleInput">Role tag</label>
-        <input type="text" id="roleInput" value="THE CAPTAIN" maxlength="24">
+        <input type="text" id="roleInput" value="THE QUEEN" maxlength="24">
         <label class="field-label" for="roleSubInput">Role sub-line (place · time · note)</label>
-        <input type="text" id="roleSubInput" value="PIER 9 · 6:40 PM · FIRST CAST" maxlength="64">
-        <p class="blurb">The role tag is set automatically from the panel's position — the hero is the lead — and you can still edit it by hand.</p>
+        <input type="text" id="roleSubInput" value="OCEAN DRIVE · 6:40 PM · RUNS THE STRIP" maxlength="64">
+        <p class="blurb">The role tag is set automatically from the panel's position — the hero is the lead — and you can still edit it by hand. Scene panels get location tags instead of cast roles.</p>
         <h3 id="cropPanelLabel">Panel 1</h3>
         <label class="slider-label" for="zoomRange">Zoom <span id="zoomValue">1.15×</span></label>
         <input type="range" id="zoomRange" min="1" max="3" step="0.01" value="1.15">
@@ -85,29 +86,31 @@
       <section class="group">
         <h2>Title</h2>
         <label class="field-label" for="capInput">Giant title</label>
-        <input type="text" id="capInput" value="Sunset Heist" maxlength="48">
+        <input type="text" id="capInput" value="Sunset Heat" maxlength="48">
         <label class="field-label" for="subInput">Neon script subtitle</label>
-        <input type="text" id="subInput" value="chasing golden hour" maxlength="64">
+        <input type="text" id="subInput" value="chasing the last light" maxlength="64">
         <label class="slider-label" for="capSize">Title size <span id="capSizeValue">1.00×</span></label>
         <input type="range" id="capSize" min="0.7" max="1.4" step="0.01" value="1">
+        <label class="check"><input type="checkbox" id="stackedCheck"> Stacked title (two lines, fits narrow formats)</label>
       </section>
 
       <section class="group">
         <h2>Grade</h2>
         <div id="gradeRow" class="row grid3">
-          <button type="button" data-grade="sunset" class="active">Sunset</button>
+          <button type="button" data-grade="duotone" class="active">Sunset Duotone</button>
+          <button type="button" data-grade="sunset">Sunset</button>
           <button type="button" data-grade="neon">Neon Night</button>
           <button type="button" data-grade="golden">Golden Hour</button>
           <button type="button" data-grade="noir">Vice Noir</button>
           <button type="button" data-grade="palm">Palm Pink</button>
           <button type="button" data-grade="heatwave">Heatwave</button>
         </div>
-        <p id="gradeBlurb" class="blurb">Magenta-orange dusk, teal shadows — the Vice City grade.</p>
+        <p id="gradeBlurb" class="blurb">One warm orange-magenta-purple grade over every panel.</p>
         <label class="slider-label" for="gradeRange">Grade strength <span id="gradeValue">80%</span></label>
         <input type="range" id="gradeRange" min="0" max="1" step="0.01" value="0.8">
         <label class="slider-label" for="grainRange">Film grain <span id="grainValue">50%</span></label>
         <input type="range" id="grainRange" min="0" max="1" step="0.01" value="0.5">
-        <label class="check"><input type="checkbox" id="halftoneCheck" checked> Halftone dots in the sky</label>
+        <label class="check"><input type="checkbox" id="halftoneCheck"> Halftone dots in the sky</label>
         <label class="check"><input type="checkbox" id="inkCheck"> Poster Ink (painted, high-contrast photos)</label>
       </section>
 
@@ -119,7 +122,7 @@
         <label class="field-label" for="quoteSourceInput">Quote source</label>
         <input type="text" id="quoteSourceInput" value="THE COAST GAZETTE" maxlength="48">
         <label class="field-label" for="taglineInput">Tagline</label>
-        <input type="text" id="taglineInput" value="ONE PIER · ONE BOULEVARD · NO WAY BACK" maxlength="64">
+        <input type="text" id="taglineInput" value="FIVE FACES · ONE HARBOR · NO CURFEW" maxlength="64">
         <label class="field-label" for="billingInput">Billing block</label>
         <input type="text" id="billingInput" value="A VICE COVER PICTURES PRODUCTION · STARRING YOU · SHOT ON YOUR OWN CAMERA · GRADED BY HAND" maxlength="160">
         <div class="row">
@@ -136,15 +139,6 @@
           </div>
         </div>
         <div class="row">
-          <div class="half">
-            <label class="field-label" for="heatSelect">Heat meter</label>
-            <select id="heatSelect">
-              <option value="0">No meter</option>
-              <option value="3">★★★☆☆</option>
-              <option value="4" selected>★★★★☆</option>
-              <option value="5">★★★★★</option>
-            </select>
-          </div>
           <div class="half checks">
             <label class="check"><input type="checkbox" id="sealCheck" checked> Gold seal</label>
             <label class="check"><input type="checkbox" id="barcodeCheck" checked> Barcode</label>

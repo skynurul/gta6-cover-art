@@ -1,8 +1,8 @@
-// Poster layouts for Vice Cover Studio, round 3.
+// Poster layouts for Vice Cover Studio, round 4.
 //
 // The layout language follows the top-50 covers of the bounty: slanted
 // panels with thin gold borders, a big centre hero panel that pops out
-// and overlaps its neighbours, and a cast of 5-6 panels so the cover
+// and overlaps its neighbours, and a cast of 5-7 panels so the cover
 // reads as a movie poster, not a photo grid. Every layout is a list of
 // panels in normalised coordinates (0..1 of the cover width and height),
 // so the same layout works for the square, the portrait and the
@@ -14,11 +14,28 @@
 //           ways so their shared edge is one clean diagonal.
 //   hero  — drawn last, on top of its neighbours, with a drop shadow.
 //
-// Round 3 adds the cast order: roleRanks() ranks panels for the auto
-// cast tag — the hero is the lead (rank 0), the rest follow in reading
-// order (top row first, left to right), so a tag follows a panel's
-// position on the poster rather than the order it was picked in.
+// Round 4 adds Title Band, the new default: three panels on top, a
+// full-width title band in the middle (the title, the script subtitle
+// and the tagline ribbon each own a reserved slot inside it, so no
+// text ever overlaps another), and four panels along the bottom —
+// five faces plus the helicopter and the red sports car. The bottom
+// panels of Poster Cast and Pop-Out Hero now run to the billing strip
+// (0.93) so no empty black band is left at the bottom of the cover.
 export const LAYOUTS = {
+  titleband: {
+    id: 'titleband',
+    name: 'Title Band',
+    blurb: 'Seven panels around a full-width title band — the one-sheet poster.',
+    panels: [
+      { x: 0.0, y: 0.0, w: 1 / 3, h: 0.24, slant: 0.06 },
+      { x: 1 / 3, y: 0.0, w: 1 / 3, h: 0.24, slant: -0.06, hero: true },
+      { x: 2 / 3, y: 0.0, w: 1 / 3, h: 0.24, slant: 0.06 },
+      { x: 0.0, y: 0.63, w: 0.25, h: 0.3, slant: 0.06 },
+      { x: 0.25, y: 0.63, w: 0.25, h: 0.3, slant: -0.06 },
+      { x: 0.5, y: 0.63, w: 0.25, h: 0.3, slant: 0.06 },
+      { x: 0.75, y: 0.63, w: 0.25, h: 0.3, slant: -0.06 },
+    ],
+  },
   cast: {
     id: 'cast',
     name: 'Poster Cast',
@@ -27,9 +44,9 @@ export const LAYOUTS = {
       { x: 0.0, y: 0.0, w: 0.31, h: 0.44, slant: 0.1 },
       { x: 0.29, y: 0.0, w: 0.4, h: 0.6, slant: 0, hero: true },
       { x: 0.69, y: 0.0, w: 0.31, h: 0.44, slant: -0.1 },
-      { x: 0.0, y: 0.44, w: 0.31, h: 0.42, slant: 0.1 },
-      { x: 0.31, y: 0.6, w: 0.38, h: 0.26, slant: 0 },
-      { x: 0.69, y: 0.44, w: 0.31, h: 0.42, slant: -0.1 },
+      { x: 0.0, y: 0.44, w: 0.31, h: 0.49, slant: 0.1 },
+      { x: 0.31, y: 0.6, w: 0.38, h: 0.33, slant: 0 },
+      { x: 0.69, y: 0.44, w: 0.31, h: 0.49, slant: -0.1 },
     ],
   },
   popout: {
@@ -37,11 +54,11 @@ export const LAYOUTS = {
     name: 'Pop-Out Hero',
     blurb: 'One tall hero on the left, four cast panels on the right.',
     panels: [
-      { x: 0.0, y: 0.0, w: 0.42, h: 0.86, slant: 0, hero: true },
+      { x: 0.0, y: 0.0, w: 0.42, h: 0.93, slant: 0, hero: true },
       { x: 0.4, y: 0.0, w: 0.3, h: 0.43, slant: 0.08 },
       { x: 0.7, y: 0.0, w: 0.3, h: 0.43, slant: -0.08 },
-      { x: 0.4, y: 0.43, w: 0.3, h: 0.43, slant: 0.08 },
-      { x: 0.7, y: 0.43, w: 0.3, h: 0.43, slant: -0.08 },
+      { x: 0.4, y: 0.43, w: 0.3, h: 0.5, slant: 0.08 },
+      { x: 0.7, y: 0.43, w: 0.3, h: 0.5, slant: -0.08 },
     ],
   },
   slant: {
@@ -92,7 +109,7 @@ export const LAYOUTS = {
 export const LAYOUT_IDS = Object.keys(LAYOUTS);
 
 export function layoutById(id) {
-  return LAYOUTS[id] || LAYOUTS.cast;
+  return LAYOUTS[id] || LAYOUTS.titleband;
 }
 
 // Index of the layout's hero panel, or -1 when no panel is the hero

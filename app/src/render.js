@@ -1,4 +1,4 @@
-// Cover rendering for Vice Cover Studio, round 3: the movie-poster
+// Cover rendering for Vice Cover Studio, round 4: the movie-poster
 // look. Panels are slanted with thin gold borders, one hero pops out
 // over its neighbours, and the cover carries the full poster furniture
 // (quote bar, giant striped-gradient title, neon script subtitle, role
@@ -6,10 +6,22 @@
 // drawn on a 2D canvas so the preview and the exported PNG come from the
 // exact same code.
 //
-// Round 3 adds the Sunset sky glow: the Sunset grade carries a glow
-// spec (a sun position and colour), and applySkyGlow paints a warm
-// radial halo over the sky after the grade wash, so the sunset reads
-// stronger without touching the photos' own light.
+// Round 4:
+//  - Sunset Duotone, the new default grade: one warm orange/magenta/
+//    purple duotone + grain + vignette over every panel, so the whole
+//    poster reads as one photograph, not a collage.
+//  - The title lives in its own band (Title Band layout): the title,
+//    the script subtitle and the tagline ribbon each own a reserved
+//    vertical slot, so no text ever covers another text. The title is
+//    much bigger here (~30% of cover height in font size, cap height
+//    ~21%), and a stacked two-line mode fits narrow formats.
+//  - The billing strip is tightened (7% of cover height) and the gold
+//    seal is enlarged so its text stays legible at 1024 px wide. The
+//    HEAT meter is gone from the cover — the VOL badge stands alone in
+//    the top-right corner.
+//  - Role chips are clamped above the billing strip and kept out of the
+//    tagline ribbon's slot in every layout.
+
 import { panelPolys, drawOrder, layoutById } from './layouts.js';
 
 let grainTile = null;
@@ -43,6 +55,14 @@ function makeGrainTile() {
 // halo radius (fraction of the cover's long side), its colour and its
 // peak alpha.
 export const GRADES = {
+  duotone: {
+    id: 'duotone',
+    name: 'Sunset Duotone',
+    blurb: 'One warm orange-magenta-purple grade over every panel.',
+    wash: [[0, '255,120,40', 0.5], [0.3, '255,80,110', 0.35], [0.6, '200,50,140', 0.3], [1, '120,40,120', 0.45]],
+    teal: 0.05, vig: 0.45, sat: 1.35, con: 1.12,
+    glow: { x: 0.7, y: 0.2, r: 0.45, color: '255, 190, 80', alpha: 0.4 },
+  },
   sunset: {
     id: 'sunset',
     name: 'Sunset',
@@ -91,7 +111,7 @@ export const GRADES = {
 export const GRADE_IDS = Object.keys(GRADES);
 
 export function gradeById(id) {
-  return GRADES[id] || GRADES.sunset;
+  return GRADES[id] || GRADES.duotone;
 }
 
 function pathPoly(ctx, poly) {
@@ -167,10 +187,10 @@ function applyGrade(ctx, width, height, grade, strength) {
   ctx.restore();
 }
 
-// Sky glow (Sunset grade only): a warm radial halo around the sun's
-// position on the cover, drawn with 'screen' so it brightens the sky
-// without washing out the panels. A bright core marks the sun itself.
-// Grades without a glow spec are left untouched.
+// Sky glow (Sunset and Sunset Duotone grades): a warm radial halo
+// around the sun's position on the cover, drawn with 'screen' so it
+// brightens the sky without washing out the panels. A bright core
+// marks the sun itself. Grades without a glow spec are left untouched.
 function applySkyGlow(ctx, width, height, grade, strength) {
   const glow = grade && grade.glow;
   if (!glow || strength <= 0) return;
@@ -224,6 +244,39 @@ function applyGrain(ctx, width, height, amount) {
   ctx.restore();
 }
 
+// ---- Title slots -----------------------------------------------------------
+// The title, the script subtitle and the tagline ribbon each own a
+// reserved vertical slot, so no text ever covers another text. The
+// Title Band layout has its own tall band in the middle of the cover;
+// every other layout keeps the round-3 positions (title overlapping
+// the panels mid-cover, script just under it, ribbon below that).
+function titleSlots(layoutId, height, state) {
+  if (layoutId === 'titleband') {
+    return {
+      titleBaseline: height * 0.46,
+      stackedBaselines: [height * 0.36, height * 0.485],
+      scriptBaseline: height * 0.56,
+      taglineCenter: height * 0.595,
+      titleSize: height * 0.25 * (state.captionSize || 1),
+      stackedSize: height * 0.13 * (state.captionSize || 1),
+    };
+  }
+  return {
+    titleBaseline: height * 0.7,
+    stackedBaselines: [height * 0.6, height * 0.72],
+    scriptBaseline: height * 0.735,
+    taglineCenter: height * 0.8,
+    titleSize: height * 0.15 * (state.captionSize || 1),
+    stackedSize: height * 0.11 * (state.captionSize || 1),
+  };
+}
+
+// The height of the tagline ribbon, so role chips can be kept out of
+// its slot. Mirrors drawTagline's sizing.
+function taglineHeight(height) {
+  return Math.round(height * 0.026) * 1.9;
+}
+
 // ---- Giant striped-gradient title ------------------------------------------
 // Yellow-to-orange-to-magenta vertical gradient, horizontal stripe bands
 // baked into the gradient itself (hard colour stops), a thick dark
@@ -271,30 +324,18 @@ function stripedTitleGradient(g, y0, y1) {
   return grad;
 }
 
-function drawTitle(ctx, width, height, state) {
-  const text = (state.caption || '').trim().toUpperCase();
-  if (!text) return;
-  const maxW = width * 0.92;
-  let size = Math.round(height * 0.15 * (state.captionSize || 1));
+// One line of the giant title: dark 3D extrusion stepped down-right,
+// thick dark outline, then the striped gradient fill.
+function drawTitleLine(ctx, text, cx, baseY, size) {
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.font = `${size}px Anton, 'Arial Narrow', sans-serif`;
-  while (size > 20 && ctx.measureText(text).width > maxW) {
-    size -= 2;
-    ctx.font = `${size}px Anton, 'Arial Narrow', sans-serif`;
-  }
-  const cx = width / 2;
-  const baseY = height * 0.7;
-
-  // 3D extrusion: dark copies stepped down-right behind the letters.
   const step = Math.max(2, size * 0.045);
   ctx.fillStyle = '#2a0a1e';
   for (let k = 4; k >= 1; k -= 1) {
     ctx.fillText(text, cx + step * k * 0.55, baseY + step * k);
   }
-
-  // Thick dark outline, then the striped gradient fill.
   ctx.lineJoin = 'round';
   ctx.lineWidth = Math.max(3, size * 0.09);
   ctx.strokeStyle = '#1d0512';
@@ -304,11 +345,51 @@ function drawTitle(ctx, width, height, state) {
   ctx.restore();
 }
 
-// Neon script subtitle in Pacifico, glowing pink, tilted, overlapping
-// the title's lower edge and offset to the right.
+// Shrink a title line to fit the cover width, keeping at least 20 px.
+function fitTitleSize(ctx, text, maxW, startSize) {
+  let size = Math.round(startSize);
+  ctx.font = `${size}px Anton, 'Arial Narrow', sans-serif`;
+  while (size > 20 && ctx.measureText(text).width > maxW) {
+    size -= 2;
+    ctx.font = `${size}px Anton, 'Arial Narrow', sans-serif`;
+  }
+  return size;
+}
+
+function drawTitle(ctx, width, height, state) {
+  const text = (state.caption || '').trim().toUpperCase();
+  if (!text) return;
+  const slots = titleSlots(state.layout, height, state);
+  const maxW = width * 0.92;
+  const cx = width / 2;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  if (state.titleStacked) {
+    // Two-line mode: split the title at the middle word so both lines
+    // are about the same length. Each line keeps the same gradient,
+    // outline and 3D treatment as the single-line title.
+    const words = text.split(/\s+/);
+    const mid = Math.ceil(words.length / 2);
+    const lines = [words.slice(0, mid).join(' '), words.slice(mid).join(' ')].filter(Boolean);
+    lines.forEach((line, li) => {
+      const size = fitTitleSize(ctx, line, maxW, slots.stackedSize);
+      const baseY = slots.stackedBaselines[Math.min(li, slots.stackedBaselines.length - 1)];
+      drawTitleLine(ctx, line, cx, baseY, size);
+    });
+  } else {
+    const size = fitTitleSize(ctx, text, maxW, slots.titleSize);
+    drawTitleLine(ctx, text, cx, slots.titleBaseline, size);
+  }
+  ctx.restore();
+}
+
+// Neon script subtitle in Pacifico, glowing pink, tilted, sitting in
+// its own slot under the title.
 function drawScript(ctx, width, height, state) {
   const text = (state.script || '').trim();
   if (!text) return;
+  const slots = titleSlots(state.layout, height, state);
   const maxW = width * 0.62;
   let size = Math.round(height * 0.058);
   ctx.save();
@@ -319,7 +400,7 @@ function drawScript(ctx, width, height, state) {
     size -= 2;
     ctx.font = `${size}px Pacifico, cursive`;
   }
-  ctx.translate(width * 0.58, height * 0.745);
+  ctx.translate(width * 0.58, slots.scriptBaseline);
   ctx.rotate(-0.05);
   ctx.shadowColor = 'rgba(255, 46, 136, 0.9)';
   ctx.shadowBlur = size * 0.45;
@@ -403,11 +484,17 @@ function drawQuoteBar(ctx, width, height, state) {
 // Role tag chip on a panel: a slanted black chip with a pink accent bar
 // and the role in white, plus an optional sub-line (place · time · note)
 // under it. The hero's tag sits at the top of its panel, like the top
-// covers; every other panel's tag sits at the bottom.
+// covers; every other panel's tag sits at the bottom. The whole tag
+// block stays above the billing strip and out of the tagline ribbon's
+// slot, so no text is ever half-covered.
 function drawRoleTags(ctx, width, height, state) {
   const polys = panelPolys(state.layout, width, height);
   const layout = layoutById(state.layout);
   const gap = Math.max(4, Math.round(height * 0.008));
+  const slots = titleSlots(state.layout, height, state);
+  const ribbonH = taglineHeight(height);
+  const ribbonTop = (state.tagline || '').trim() ? slots.taglineCenter - ribbonH / 2 : Infinity;
+  const ribbonBottom = (state.tagline || '').trim() ? slots.taglineCenter + ribbonH / 2 : -Infinity;
   ctx.save();
   ctx.textBaseline = 'alphabetic';
   layout.panels.forEach((panel, i) => {
@@ -431,12 +518,16 @@ function drawRoleTags(ctx, width, height, state) {
     // The hero's tag sits at the top of its panel, below the quote bar
     // when the furniture is on; every other panel's tag sits at the
     // bottom. The sub-line always goes under the chip, like the top
-    // covers. The whole tag block stays above the billing strip.
+    // covers. The whole tag block stays above the billing strip and
+    // never inside the tagline ribbon's slot.
     const topInset = panel.hero ? (state.furniture === false ? gap : height * 0.048 + gap) : gap;
     let chipY = panel.hero ? top + topInset : bottom - gap - chipH;
     const subSize = Math.max(10, Math.round(height * 0.015));
     const blockH = chipH + (sub ? subSize * 1.5 + gap : 0);
-    chipY = Math.min(chipY, height * 0.898 - blockH);
+    chipY = Math.min(chipY, height * 0.918 - blockH);
+    if (chipY + blockH > ribbonTop - gap && chipY < ribbonBottom + gap) {
+      chipY = ribbonTop - gap - blockH;
+    }
     chipY = Math.max(top + gap, chipY);
     if (role) {
       // Slanted chip: top edge shifted right.
@@ -485,11 +576,12 @@ function drawRoleTags(ctx, width, height, state) {
   ctx.restore();
 }
 
-// Tagline ribbon under the title: small-caps text on a dark pill with
-// pink chevrons at both ends.
+// Tagline ribbon in its own slot under the script subtitle: small-caps
+// text on a dark pill with pink chevrons at both ends.
 function drawTagline(ctx, width, height, state) {
   const text = (state.tagline || '').trim();
   if (!text) return;
+  const slots = titleSlots(state.layout, height, state);
   let size = Math.round(height * 0.026);
   ctx.save();
   ctx.font = `${size}px 'Bebas Neue', 'Arial Narrow', sans-serif`;
@@ -515,7 +607,7 @@ function drawTagline(ctx, width, height, state) {
   const rw = tw + pad * 2;
   const rh = size * 1.9;
   const rx = (width - rw) / 2;
-  const ry = height * 0.8 - rh / 2;
+  const ry = slots.taglineCenter - rh / 2;
   ctx.fillStyle = 'rgba(18, 4, 14, 0.88)';
   roundRectPath(ctx, rx, ry, rw, rh, rh / 2);
   ctx.fill();
@@ -558,7 +650,7 @@ function drawSeal(ctx, cx, cy, r) {
   ctx.fillStyle = '#1d0512';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const size = Math.max(7, Math.round(r * 0.2));
+  const size = Math.max(7, Math.round(r * 0.24));
   ctx.font = `${size}px Anton, 'Arial Narrow', sans-serif`;
   ctx.fillText('ORIGINAL', cx, cy - size * 0.75);
   ctx.fillText('COVER ART', cx, cy + size * 0.25);
@@ -590,9 +682,10 @@ function drawBarcode(ctx, x, y, w, h) {
 }
 
 // Bottom billing strip: release chip on the left, the billing block in
-// the middle, the gold seal and the barcode on the right.
+// the middle, the gold seal and the barcode on the right. The strip is
+// tight (7% of cover height) so the panels above it fill the frame.
 function drawBilling(ctx, width, height, state) {
-  const stripH = height * 0.095;
+  const stripH = height * 0.07;
   const y0 = height - stripH;
   ctx.save();
   ctx.fillStyle = 'rgba(18, 4, 14, 0.95)';
@@ -651,41 +744,13 @@ function drawBilling(ctx, width, height, state) {
   }
 
   if (state.seal !== false) {
-    drawSeal(ctx, width * 0.855, y0 + stripH * 0.44, stripH * 0.42);
+    drawSeal(ctx, width * 0.855, y0 + stripH * 0.5, stripH * 0.62);
   }
   if (state.barcode !== false) {
     const bw = width * 0.075;
-    const bh = stripH * 0.44;
-    drawBarcode(ctx, width - bw - width * 0.012, height - bh - height * 0.008, bw, bh);
+    const bh = stripH * 0.72;
+    drawBarcode(ctx, width - bw - width * 0.012, height - bh - height * 0.006, bw, bh);
   }
-  ctx.restore();
-}
-
-// HEAT meter pill under the quote bar, top right.
-function drawHeat(ctx, width, height, state) {
-  const heat = Math.max(0, Math.min(5, Math.round(state.heat || 0)));
-  if (heat <= 0) return;
-  const size = Math.round(height * 0.02);
-  ctx.save();
-  ctx.font = `${size}px 'Bebas Neue', 'Arial Narrow', sans-serif`;
-  const label = 'HEAT ';
-  const stars = '★'.repeat(heat) + '☆'.repeat(5 - heat);
-  const lw = ctx.measureText(label).width;
-  const sw = ctx.measureText(stars).width;
-  const pad = size * 0.9;
-  const pw = lw + sw + pad * 2;
-  const ph = size * 1.9;
-  const px = width - pw - width * 0.012;
-  const py = height * 0.062;
-  ctx.fillStyle = 'rgba(10, 4, 10, 0.85)';
-  roundRectPath(ctx, px, py, pw, ph, ph / 2);
-  ctx.fill();
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#ffe9c4';
-  ctx.fillText(label, px + pad, py + ph / 2 + 1);
-  ctx.fillStyle = '#ffd23f';
-  ctx.fillText(stars, px + pad + lw, py + ph / 2 + 1);
   ctx.restore();
 }
 
@@ -769,7 +834,6 @@ export function drawCover(ctx, width, height, state, photos) {
     drawRoleTags(ctx, width, height, state);
     drawTagline(ctx, width, height, state);
     drawBilling(ctx, width, height, state);
-    drawHeat(ctx, width, height, state);
   } else {
     drawTitle(ctx, width, height, state);
     drawScript(ctx, width, height, state);
