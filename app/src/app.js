@@ -1,8 +1,21 @@
-// Vice Cover Studio editor, round 2: state, photo library, panel
+// Vice Cover Studio editor, round 3: state, photo library, panel
 // picking and dragging, caption, grade and poster-furniture controls.
 // The cover itself is drawn by render.js; this file only wires the
 // editor around it.
-import { LAYOUTS, LAYOUT_IDS, layoutById, panelRects, panelPolys, panelAt, drawOrder } from './layouts.js';
+//
+// Round 3:
+//  - Per-panel crop: every panel keeps its own zoom + pan, edited with
+//    the picked panel's sliders or by dragging, and remembered per
+//    (panel, photo) — switch a panel's photo away and back and its crop
+//    is exactly where you left it.
+//  - Face-aware auto-crop ("Jaga wajah"): the sample photos carry a
+//    measured face anchor; one click centres that face in the picked
+//    panel. Uploaded photos have no anchor and fall back to the photo's
+//    focal centre.
+//  - Auto cast tag: a panel's role comes from its photo's role pool by
+//    the panel's position — the hero is the lead, the rest follow in
+//    reading order. A role you typed yourself is never overwritten.
+import { LAYOUTS, LAYOUT_IDS, layoutById, panelRects, panelPolys, panelAt, drawOrder, roleRanks } from './layouts.js';
 import { drawCover, exportCover, GRADES, GRADE_IDS, gradeById } from './render.js';
 
 export const EXPORT_SIZES = [
@@ -11,14 +24,22 @@ export const EXPORT_SIZES = [
   { id: '1920x1080', w: 1920, h: 1080, label: '1920 × 1080' },
 ];
 
+// The built-in photos, with a face anchor measured from the photo
+// itself (normalised x/y/w/h of the face box). The face-aware crop
+// centres this box in a panel; without an anchor a photo falls back to
+// its focal centre (0.5, 0.5).
 const SAMPLES = [
-  { id: 'pier', name: 'Pier sunset', src: 'samples/pier.jpg' },
-  { id: 'boulevard', name: 'Boulevard', src: 'samples/boulevard.jpg' },
+  // pier.jpg 720x720: the fisherman, bucket hat, face x 0.15-0.50,
+  // y 0.03-0.38 (hat included, it is part of his look).
+  { id: 'pier', name: 'Pier sunset', src: 'samples/pier.jpg', face: { x: 0.15, y: 0.03, w: 0.35, h: 0.35 } },
+  // boulevard.jpg 544x720: the woman in sunglasses, face x 0.30-0.62,
+  // y 0.09-0.35.
+  { id: 'boulevard', name: 'Boulevard', src: 'samples/boulevard.jpg', face: { x: 0.30, y: 0.09, w: 0.32, h: 0.26 } },
 ];
 
 // Cast roles per sample photo, with a sub-line (place · time · note) for
-// each. When a panel gets a photo, it takes the first role of that
-// photo no other panel is using, so the cast never repeats a name.
+// each. The auto cast tag hands them out in panel-position order (see
+// assignRolesByPosition), so the cast never repeats a name.
 const ROLE_POOLS = {
   pier: [
     { role: 'THE CAPTAIN', sub: 'PIER 9 · 6:40 PM · FIRST CAST' },
@@ -86,12 +107,17 @@ const state = {
   panels: DEFAULT_PANELS.map((p) => ({ ...p })),
 };
 
-const photos = new Map(); // id -> { name, img, builtin }
+const photos = new Map(); // id -> { name, img, builtin, face }
 const uploads = []; // upload ids in order, for the photo picker
 let uploadCount = 0;
 let selectedPanel = 0;
 let previewSize = { w: 1080, h: 1080 };
 let renderQueued = false;
+
+// Per-panel crop memory: key `${panelIndex}:${photoId}` -> { zoom, ox,
+// oy }. A panel's crop belongs to the (panel, photo) pair, so changing
+// a panel's photo and changing it back restores the crop it had.
+const cropStore = new Map();
 
 const $ = (id) => document.getElementById(id);
 
@@ -99,34 +125,163 @@ function panelCount() {
   return layoutById(state.layout).panels.length;
 }
 
-function pickRole(photoId, exceptIndex) {
-  const pool = ROLE_POOLS[photoId];
-  if (!pool) return { ...UPLOAD_ROLE };
-  const used = new Set();
-  state.panels.forEach((p, i) => {
-    if (i !== exceptIndex && p.photo === photoId) used.add(p.role);
+function cropKey(index, photoId) {
+  return `${index}:${photoId}`;
+}
+
+function saveCrop(index) {
+  const slot = state.panels[index];
+  if (!slot) return;
+  cropStore.set(cropKey(index, slot.photo), { zoom: slot.zoom, ox: slot.ox, oy: slot.oy });
+}
+
+function clampCrop(crop) {
+  return {
+    zoom: Math.max(1, Math.min(3, Number(crop.zoom) || 1)),
+    ox: Math.max(-0.8, Math.min(0.8, Number(crop.ox) || 0)),
+    oy: Math.max(-0.8, Math.min(0.8, Number(crop.oy) || 0)),
+  };
+}
+
+function setCrop(index, crop) {
+  const slot = state.panels[index];
+  if (!slot) return;
+  const c = clampCrop(crop);
+  slot.zoom = c.zoom;
+  slot.ox = c.ox;
+  slot.oy = c.oy;
+  saveCrop(index);
+}
+
+// ---- Face-aware auto-crop -------------------------------------------------
+// The crop that puts a photo's face anchor (or, with no anchor, its
+// focal centre) in the middle of panel `index`, zoomed so the face
+// spans about half the panel's width. The pan is clamped with the same
+// limits the renderer uses, so the face lands as close to the centre
+// as the photo's coverage allows.
+function faceCropFor(index, w = previewSize.w, h = previewSize.h) {
+  const slot = state.panels[index];
+  const entry = slot ? photos.get(slot.photo) : null;
+  const rect = panelRects(state.layout, w, h)[index];
+  if (!slot || !entry || !rect) return { zoom: 1.3, ox: 0, oy: 0, anchor: 'none' };
+  const img = entry.img;
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (!iw || !ih) return { zoom: 1.3, ox: 0, oy: 0, anchor: 'none' };
+  const face = entry.face || null;
+  const cx = face ? face.x + face.w / 2 : 0.5;
+  const cy = face ? face.y + face.h / 2 : 0.5;
+  const fw = face ? face.w : 0.25;
+  const base = Math.max(rect.w / iw, rect.h / ih);
+  let zoom = (0.55 * rect.w) / (fw * iw * base);
+  zoom = Math.max(1, Math.min(3, zoom));
+  const scale = base * zoom;
+  const dw = iw * scale;
+  const dh = ih * scale;
+  const maxOx = Math.max(0, (dw - rect.w) / 2 / rect.w);
+  const maxOy = Math.max(0, (dh - rect.h) / 2 / rect.h);
+  const ox = Math.max(-maxOx, Math.min(maxOx, (dw * (0.5 - cx)) / rect.w));
+  const oy = Math.max(-maxOy, Math.min(maxOy, (dh * (0.5 - cy)) / rect.h));
+  return { zoom, ox, oy, anchor: face ? 'face' : 'focal' };
+}
+
+function applyFaceCrop(index) {
+  const slot = state.panels[index];
+  if (!slot) return null;
+  const c = faceCropFor(index);
+  setCrop(index, c);
+  syncCropSliders();
+  queueRender();
+  const entry = photos.get(slot.photo);
+  const what = c.anchor === 'face' ? 'face' : 'centre';
+  setStatus(`Panel ${index + 1}: framed on the photo's ${what} — drag or slide to adjust.`);
+  return c;
+}
+
+function resetCrop(index) {
+  const slot = state.panels[index];
+  if (!slot) return;
+  const factory = DEFAULT_PANELS[index];
+  if (factory && factory.photo === slot.photo) {
+    setCrop(index, { zoom: factory.zoom, ox: factory.ox, oy: factory.oy });
+    setStatus(`Panel ${index + 1}: crop reset to the poster's framing.`);
+  } else {
+    applyFaceCrop(index);
+  }
+  syncCropSliders();
+  queueRender();
+}
+
+// ---- Auto cast tag from panel position ------------------------------------
+// Roles are handed out in cast rank (hero = lead, then reading order),
+// one photo at a time: the first panel (by rank) using a photo gets
+// that photo's first role, the next gets the second, and so on. A role
+// the user typed by hand is not in any pool, so it is left alone — the
+// tag stays editable, and only auto-assigned tags move when the layout
+// or a photo changes.
+function assignRolesByPosition() {
+  const ranks = roleRanks(state.layout);
+  const count = panelCount();
+  const order = [];
+  for (let i = 0; i < count; i += 1) order.push(i);
+  order.sort((a, b) => ranks[a] - ranks[b]);
+  const used = new Map(); // photoId -> Set(role)
+  order.forEach((i) => {
+    const slot = state.panels[i];
+    if (!slot) return;
+    const pool = ROLE_POOLS[slot.photo];
+    if (!pool) {
+      if (!slot.role) {
+        slot.role = UPLOAD_ROLE.role;
+        slot.sub = UPLOAD_ROLE.sub;
+      }
+      return;
+    }
+    const isAuto = pool.some((r) => r.role === slot.role);
+    if (slot.role && !isAuto) return; // hand-typed tag: keep it
+    const usedSet = used.get(slot.photo) || new Set();
+    const free = pool.find((r) => !usedSet.has(r.role));
+    const picked = free || pool[0];
+    slot.role = picked.role;
+    slot.sub = picked.sub;
+    usedSet.add(picked.role);
+    used.set(slot.photo, usedSet);
   });
-  const free = pool.find((r) => !used.has(r.role));
-  return { ...(free || pool[0]) };
 }
 
 function setPanelPhoto(index, photoId) {
   const slot = state.panels[index];
   if (!slot) return;
+  saveCrop(index); // remember the outgoing photo's crop for this panel
   slot.photo = photoId;
-  const picked = pickRole(photoId, index);
-  slot.role = picked.role;
-  slot.sub = picked.sub;
+  slot.role = '';
+  slot.sub = '';
+  const stored = cropStore.get(cropKey(index, photoId));
+  if (stored) {
+    slot.zoom = stored.zoom;
+    slot.ox = stored.ox;
+    slot.oy = stored.oy;
+  } else {
+    // First time this photo is on this panel: frame its face (or its
+    // centre, for a photo with no face anchor).
+    const c = faceCropFor(index);
+    slot.zoom = c.zoom;
+    slot.ox = c.ox;
+    slot.oy = c.oy;
+    saveCrop(index);
+  }
+  assignRolesByPosition();
 }
 
 function setLayout(layoutId) {
   state.layout = layoutById(layoutId).id;
   if (selectedPanel >= panelCount()) selectedPanel = 0;
+  assignRolesByPosition();
   syncLayoutButtons();
   syncPanelList();
   syncPhotoButtons();
   syncRoleInputs();
-  syncZoomSlider();
+  syncCropSliders();
   queueRender();
 }
 
@@ -195,7 +350,7 @@ function syncPanelList() {
       syncPanelList();
       syncPhotoButtons();
       syncRoleInputs();
-      syncZoomSlider();
+      syncCropSliders();
       queueRender();
     });
     list.appendChild(btn);
@@ -218,6 +373,7 @@ function syncPhotoButtons() {
       syncPanelList();
       syncPhotoButtons();
       syncRoleInputs();
+      syncCropSliders();
       queueRender();
     });
     list.appendChild(btn);
@@ -237,6 +393,7 @@ function syncPhotoButtons() {
     syncPanelList();
     syncPhotoButtons();
     syncRoleInputs();
+    syncCropSliders();
     queueRender();
   });
   list.appendChild(allBtn);
@@ -250,13 +407,30 @@ function syncRoleInputs() {
   if (subInput) subInput.value = slot ? slot.sub || '' : '';
 }
 
-function syncZoomSlider() {
-  const slider = $('zoomRange');
-  const label = $('zoomValue');
+// The picked panel's crop sliders: zoom and both pan offsets, plus a
+// label naming the panel they edit.
+function syncCropSliders() {
   const slot = state.panels[selectedPanel];
-  if (!slider || !slot) return;
-  slider.value = String(slot.zoom);
-  if (label) label.textContent = `${slot.zoom.toFixed(2)}×`;
+  const zoom = $('zoomRange');
+  const zoomLabel = $('zoomValue');
+  if (zoom && slot) {
+    zoom.value = String(slot.zoom);
+    if (zoomLabel) zoomLabel.textContent = `${slot.zoom.toFixed(2)}×`;
+  }
+  const ox = $('oxRange');
+  const oxLabel = $('oxValue');
+  if (ox && slot) {
+    ox.value = String(slot.ox);
+    if (oxLabel) oxLabel.textContent = `${slot.ox >= 0 ? '+' : ''}${slot.ox.toFixed(2)}`;
+  }
+  const oy = $('oyRange');
+  const oyLabel = $('oyValue');
+  if (oy && slot) {
+    oy.value = String(slot.oy);
+    if (oyLabel) oyLabel.textContent = `${slot.oy >= 0 ? '+' : ''}${slot.oy.toFixed(2)}`;
+  }
+  const cropLabel = $('cropPanelLabel');
+  if (cropLabel) cropLabel.textContent = slot ? `Panel ${selectedPanel + 1} · ${slot.role || ''}` : '';
 }
 
 function syncGradeButtons() {
@@ -305,7 +479,7 @@ async function loadSamples() {
   for (const s of SAMPLES) {
     try {
       const img = await loadImage(s.src);
-      photos.set(s.id, { name: s.name, img, builtin: true });
+      photos.set(s.id, { name: s.name, img, builtin: true, face: s.face || null });
     } catch (e) {
       console.error(e.message);
     }
@@ -321,13 +495,14 @@ function handleUploadFiles(files) {
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        photos.set(id, { name: file.name.replace(/\.[^.]+$/, ''), img, builtin: false });
+        photos.set(id, { name: file.name.replace(/\.[^.]+$/, ''), img, builtin: false, face: null });
         uploads.push(id);
         // Put the new photo on the selected panel straight away.
         if (state.panels[selectedPanel]) setPanelPhoto(selectedPanel, id);
         syncPanelList();
         syncPhotoButtons();
         syncRoleInputs();
+        syncCropSliders();
         setStatus(`Loaded ${file.name} — it is on panel ${selectedPanel + 1} now.`);
         queueRender();
       };
@@ -376,6 +551,63 @@ window.__exportCover = function (w, h) {
   return canvas.toDataURL('image/png');
 };
 window.__viceState = state;
+// Scripted hooks for the play-test: face-aware crop for a panel, the
+// crop a panel currently holds, and the layout's cast ranks.
+window.__faceCrop = function (i) {
+  const c = faceCropFor(i);
+  if (state.panels[i]) {
+    state.panels[i].zoom = c.zoom;
+    state.panels[i].ox = c.ox;
+    state.panels[i].oy = c.oy;
+    saveCrop(i);
+    syncCropSliders();
+    queueRender();
+  }
+  return c;
+};
+window.__cropFor = (i) => {
+  const s = state.panels[i];
+  return s ? { zoom: s.zoom, ox: s.ox, oy: s.oy, photo: s.photo, role: s.role } : null;
+};
+window.__cropStoreSize = () => cropStore.size;
+window.__roleRanks = () => roleRanks(state.layout);
+// Where the picked panel's face anchor (or focal centre) lands on the
+// cover, in cover pixels — for the play-test to prove the face is in
+// frame after a face-aware crop.
+window.__faceScreen = function (i, w = previewSize.w, h = previewSize.h) {
+  const slot = state.panels[i];
+  const entry = slot ? photos.get(slot.photo) : null;
+  const rect = panelRects(state.layout, w, h)[i];
+  if (!slot || !entry || !rect) return null;
+  const img = entry.img;
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  const face = entry.face || null;
+  const cx = face ? face.x + face.w / 2 : 0.5;
+  const cy = face ? face.y + face.h / 2 : 0.5;
+  const base = Math.max(rect.w / iw, rect.h / ih);
+  const scale = base * (slot.zoom || 1);
+  const dw = iw * scale;
+  const dh = ih * scale;
+  const maxOx = Math.max(0, (dw - rect.w) / 2 / rect.w);
+  const maxOy = Math.max(0, (dh - rect.h) / 2 / rect.h);
+  const ox = Math.max(-maxOx, Math.min(maxOx, slot.ox || 0));
+  const oy = Math.max(-maxOy, Math.min(maxOy, slot.oy || 0));
+  const dx = rect.x + (rect.w - dw) / 2 + ox * rect.w;
+  const dy = rect.y + (rect.h - dh) / 2 + oy * rect.h;
+  const faceX = dx + cx * dw;
+  const faceY = dy + cy * dh;
+  return {
+    anchor: face ? 'face' : 'focal',
+    faceX,
+    faceY,
+    panel: rect,
+    inside: faceX >= rect.x && faceX <= rect.x + rect.w
+      && faceY >= rect.y && faceY <= rect.y + rect.h,
+    offsetX: (faceX - (rect.x + rect.w / 2)) / rect.w,
+    offsetY: (faceY - (rect.y + rect.h / 2)) / rect.h,
+  };
+};
 
 // ---- Surprise me: one click to a whole new poster ---------------------------
 function surpriseMe() {
@@ -394,16 +626,16 @@ function surpriseMe() {
     slot.zoom = 1.3 + Math.random() * 1.1;
     slot.ox = (Math.random() - 0.5) * 0.6;
     slot.oy = (Math.random() - 0.5) * 0.5;
-    const picked = pickRole(photo, i);
-    slot.role = picked.role;
-    slot.sub = picked.sub;
+    saveCrop(i);
   });
+  assignRolesByPosition();
   if (selectedPanel >= panelCount()) selectedPanel = 0;
   syncLayoutButtons();
   syncGradeButtons();
   syncPanelList();
   syncPhotoButtons();
   syncRoleInputs();
+  syncCropSliders();
   syncFurnitureInputs();
   const cap = $('capInput');
   if (cap) cap.value = state.caption;
@@ -437,7 +669,7 @@ function bindPreview() {
       syncPanelList();
       syncPhotoButtons();
       syncRoleInputs();
-      syncZoomSlider();
+      syncCropSliders();
       queueRender();
     }
     dragging = true;
@@ -458,10 +690,12 @@ function bindPreview() {
     slot.oy = Math.max(-0.8, Math.min(0.8, slot.oy + ((event.clientY - lastY) / box.height) * (canvas.height / r.h)));
     lastX = event.clientX;
     lastY = event.clientY;
+    syncCropSliders();
     queueRender();
   });
 
   const endDrag = () => {
+    if (dragging) saveCrop(selectedPanel);
     dragging = false;
   };
   canvas.addEventListener('pointerup', endDrag);
@@ -472,7 +706,8 @@ function bindPreview() {
     const slot = state.panels[selectedPanel];
     if (!slot) return;
     slot.zoom = Math.max(1, Math.min(3, slot.zoom * (1 - event.deltaY * 0.001)));
-    syncZoomSlider();
+    saveCrop(selectedPanel);
+    syncCropSliders();
     queueRender();
   }, { passive: false });
 }
@@ -492,10 +727,37 @@ function bindControls() {
       const slot = state.panels[selectedPanel];
       if (!slot) return;
       slot.zoom = Number(zoom.value);
-      syncZoomSlider();
+      saveCrop(selectedPanel);
+      syncCropSliders();
       queueRender();
     });
   }
+  const oxRange = $('oxRange');
+  if (oxRange) {
+    oxRange.addEventListener('input', () => {
+      const slot = state.panels[selectedPanel];
+      if (!slot) return;
+      slot.ox = Number(oxRange.value);
+      saveCrop(selectedPanel);
+      syncCropSliders();
+      queueRender();
+    });
+  }
+  const oyRange = $('oyRange');
+  if (oyRange) {
+    oyRange.addEventListener('input', () => {
+      const slot = state.panels[selectedPanel];
+      if (!slot) return;
+      slot.oy = Number(oyRange.value);
+      saveCrop(selectedPanel);
+      syncCropSliders();
+      queueRender();
+    });
+  }
+  const faceBtn = $('faceCropBtn');
+  if (faceBtn) faceBtn.addEventListener('click', () => applyFaceCrop(selectedPanel));
+  const cropReset = $('cropResetBtn');
+  if (cropReset) cropReset.addEventListener('click', () => resetCrop(selectedPanel));
 
   const roleInput = $('roleInput');
   if (roleInput) {
@@ -728,6 +990,23 @@ function applyQuery() {
     if (Number.isFinite(oy)) slot.oy = Math.max(-0.8, Math.min(0.8, oy));
     if (Number.isFinite(zm)) slot.zoom = Math.max(1, Math.min(3, zm));
   });
+  // A deep link can also ask for the face-aware crop on some panels,
+  // e.g. facecrop=0,2 — the face anchor (or focal centre) is centred
+  // in each named panel.
+  if (q.get('facecrop')) {
+    q.get('facecrop').split(',').forEach((raw) => {
+      const i = Number(raw);
+      if (Number.isInteger(i) && state.panels[i]) {
+        const c = faceCropFor(i, Number(q.get('w') || previewSize.w), Number(q.get('h') || previewSize.h));
+        state.panels[i].zoom = c.zoom;
+        state.panels[i].ox = c.ox;
+        state.panels[i].oy = c.oy;
+      }
+    });
+  }
+  // Remember the (possibly deep-linked) framing as each panel's crop,
+  // so switching photos later restores it.
+  state.panels.forEach((_, i) => saveCrop(i));
   if (caption !== null) state.caption = caption;
   if (script !== null) state.script = script;
   else if (subtitle !== null) state.script = subtitle;
@@ -771,7 +1050,7 @@ async function boot() {
   syncPhotoButtons();
   syncRoleInputs();
   syncFurnitureInputs();
-  syncZoomSlider();
+  syncCropSliders();
   const coverMode = applyQuery();
   if (!coverMode) {
     // Keep the editor inputs in sync with the (possibly query-set) state.

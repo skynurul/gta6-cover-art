@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Cover Studio — movie-poster covers with cast tags, seal &amp; billing block</title>
+<title>Vice Cover Studio — per-panel crop, face-aware auto-crop, auto cast tags &amp; sunset sky glow</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -13,7 +13,7 @@
     <div class="brand">
       <span class="brand-mark">VICE</span>
       <span class="brand-name">Cover Studio</span>
-      <span class="brand-sub">Movie-poster covers · cast tags, seal &amp; billing block · 6 layouts, 6 grades · works offline</span>
+      <span class="brand-sub">Movie-poster covers · per-panel crop, face-aware auto-crop, auto cast tags, sunset sky glow · 6 layouts, 6 grades · works offline</span>
     </div>
     <div class="steps">1 · Pick photos &nbsp;→&nbsp; 2 · Pick a layout &nbsp;→&nbsp; 3 · Export PNG</div>
   </header>
@@ -27,7 +27,7 @@
           <option value="1080x1350">1080 × 1350 (portrait)</option>
           <option value="1920x1080">1920 × 1080 (landscape)</option>
         </select>
-        <span class="hint">Click a panel to pick it · drag to move the photo · scroll to zoom</span>
+        <span class="hint">Click a panel to pick it · drag to move the photo · scroll to zoom · Jaga wajah keeps the face in frame</span>
         <button type="button" id="surpriseBtn" class="surprise">🎲 Surprise me</button>
       </div>
       <div class="canvas-wrap">
@@ -61,8 +61,25 @@
         <input type="text" id="roleInput" value="THE CAPTAIN" maxlength="24">
         <label class="field-label" for="roleSubInput">Role sub-line (place · time · note)</label>
         <input type="text" id="roleSubInput" value="PIER 9 · 6:40 PM · FIRST CAST" maxlength="64">
+        <p class="blurb">The role tag is set automatically from the panel's position — the hero is the lead — and you can still edit it by hand.</p>
+        <h3 id="cropPanelLabel">Panel 1</h3>
         <label class="slider-label" for="zoomRange">Zoom <span id="zoomValue">1.15×</span></label>
         <input type="range" id="zoomRange" min="1" max="3" step="0.01" value="1.15">
+        <div class="crop-row">
+          <div class="half">
+            <label class="slider-label" for="oxRange">Pan left–right <span id="oxValue">+0.00</span></label>
+            <input type="range" id="oxRange" min="-0.8" max="0.8" step="0.01" value="0">
+          </div>
+          <div class="half">
+            <label class="slider-label" for="oyRange">Pan up–down <span id="oyValue">+0.00</span></label>
+            <input type="range" id="oyRange" min="-0.8" max="0.8" step="0.01" value="0">
+          </div>
+        </div>
+        <div class="row crop-btns">
+          <button type="button" id="faceCropBtn" class="face-btn">◎ Jaga wajah</button>
+          <button type="button" id="cropResetBtn">Reset crop</button>
+        </div>
+        <p class="blurb">Each panel keeps its own crop — switch the photo and switch it back, and the crop is where you left it.</p>
       </section>
 
       <section class="group">

@@ -1,4 +1,4 @@
-# Vice Cover Studio — movie-poster covers with cast tags, seal & billing block
+# Vice Cover Studio — movie-poster covers with per-panel crop, face-aware auto-crop, auto cast tags & sunset sky glow
 
 [![Make GTA 6 Cover Art](https://make.fun/badge/gta6-cover-art-01.svg)](https://make.fun/bounty/gta6-cover-art-01)
 [![Rank](https://make.fun/badge/gta6-cover-art-01/skynurul/gta6-cover-art/rank.svg)](https://make.fun/bounty/gta6-cover-art-01)
@@ -18,9 +18,18 @@ make.fun's "Make GTA 6 Cover Art" bounty.
   Neon Duo — slanted panels with thin gold borders, one hero panel that
   overlaps its neighbours, all in the multi-panel poster look.
 - **A cast, not a grid** — every panel carries an editable role tag
-  ("THE CAPTAIN", "THE QUEEN"…) with a sub-line (place · time · note);
-  picking a photo assigns it the first free role for that photo, so the
-  cast never repeats a name.
+  ("THE CAPTAIN", "THE QUEEN"…) with a sub-line (place · time · note).
+  The tag is set automatically from the panel's position — the hero
+  panel is the lead, the rest follow in reading order — and a tag you
+  type yourself is never overwritten.
+- **Per-panel crop** — every panel keeps its own zoom and pan, edited
+  with the picked panel's sliders or by dragging the photo, and
+  remembered per panel per photo: switch a panel's photo away and back,
+  and the crop is exactly where you left it.
+- **Face-aware auto-crop** — the sample photos carry a measured face
+  anchor, so one click on "Jaga wajah" centres that face in the picked
+  panel. A photo you upload has no anchor and falls back to its focal
+  centre; manual crop always works for any photo.
 - **The giant title** — yellow-to-orange-to-magenta striped gradient
   lettering with a thick dark outline and a stepped 3D extrusion,
   overlapping the panels mid-cover, with a glowing neon script subtitle
@@ -32,11 +41,11 @@ make.fun's "Make GTA 6 Cover Art" bounty.
 - **Six named grades** — Sunset, Neon Night, Golden Hour, Vice Noir,
   Palm Pink and Heatwave: a magenta-to-orange wash with teal shadows,
   punchy saturation and a vignette, plus an optional Poster Ink toggle
-  for a painted, high-contrast photo treatment.
+  for a painted, high-contrast photo treatment. The Sunset grade adds
+  a warm radial sky glow around the sun, so the dusk reads stronger.
 - **Any photo, per panel** — load your own photos from your machine or
   use the two free sample photos; pick a different photo for each panel
-  (or one photo across all of them), drag to position it and scroll or
-  slide to zoom.
+  (or one photo across all of them), frame each one with its own crop.
 - **Fast and easy** — "Surprise me" deals a whole new poster (layout,
   grade, title, cast) in one click; three steps from a photo to a PNG.
   Export sizes: 1080×1080, 1080×1350, 1920×1080.

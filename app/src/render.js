@@ -1,10 +1,15 @@
-// Cover rendering for Vice Cover Studio, round 2: the movie-poster
+// Cover rendering for Vice Cover Studio, round 3: the movie-poster
 // look. Panels are slanted with thin gold borders, one hero pops out
 // over its neighbours, and the cover carries the full poster furniture
 // (quote bar, giant striped-gradient title, neon script subtitle, role
 // tags, tagline ribbon, billing block, seal and barcode). Everything is
 // drawn on a 2D canvas so the preview and the exported PNG come from the
 // exact same code.
+//
+// Round 3 adds the Sunset sky glow: the Sunset grade carries a glow
+// spec (a sun position and colour), and applySkyGlow paints a warm
+// radial halo over the sky after the grade wash, so the sunset reads
+// stronger without touching the photos' own light.
 import { panelPolys, drawOrder, layoutById } from './layouts.js';
 
 let grainTile = null;
@@ -33,7 +38,10 @@ function makeGrainTile() {
 // teal shadows, punchy saturation and a dark vignette. Each preset is a
 // wash gradient (colour stops as [position, 'r,g,b', alpha]), a teal
 // multiply strength, a vignette strength, and the photo filter that
-// gives the painted, high-contrast look.
+// gives the painted, high-contrast look. The Sunset grade also carries
+// a sky glow: the sun's position on the cover (normalised x/y), the
+// halo radius (fraction of the cover's long side), its colour and its
+// peak alpha.
 export const GRADES = {
   sunset: {
     id: 'sunset',
@@ -41,6 +49,7 @@ export const GRADES = {
     blurb: 'Magenta-orange dusk, teal shadows — the Vice City grade.',
     wash: [[0, '255,46,136', 0.55], [0.35, '255,90,120', 0.16], [0.65, '255,140,60', 0.14], [1, '255,154,61', 0.46]],
     teal: 0.24, vig: 0.42, sat: 1.22, con: 1.07,
+    glow: { x: 0.7, y: 0.2, r: 0.45, color: '255, 190, 80', alpha: 0.55 },
   },
   neon: {
     id: 'neon',
@@ -154,6 +163,33 @@ function applyGrade(ctx, width, height, grade, strength) {
   vig.addColorStop(1, `rgba(8, 2, 10, ${(grade.vig * s).toFixed(3)})`);
   ctx.save();
   ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+}
+
+// Sky glow (Sunset grade only): a warm radial halo around the sun's
+// position on the cover, drawn with 'screen' so it brightens the sky
+// without washing out the panels. A bright core marks the sun itself.
+// Grades without a glow spec are left untouched.
+function applySkyGlow(ctx, width, height, grade, strength) {
+  const glow = grade && grade.glow;
+  if (!glow || strength <= 0) return;
+  const s = Math.max(0, Math.min(1, strength));
+  const cx = glow.x * width;
+  const cy = glow.y * height;
+  const r = glow.r * Math.max(width, height);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  halo.addColorStop(0, `rgba(${glow.color}, ${(glow.alpha * s).toFixed(3)})`);
+  halo.addColorStop(0.35, `rgba(255, 140, 60, ${(0.28 * s).toFixed(3)})`);
+  halo.addColorStop(1, 'rgba(255, 140, 60, 0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, width, height);
+  const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 0.22);
+  core.addColorStop(0, `rgba(255, 240, 200, ${(0.85 * s).toFixed(3)})`);
+  core.addColorStop(1, 'rgba(255, 240, 200, 0)');
+  ctx.fillStyle = core;
   ctx.fillRect(0, 0, width, height);
   ctx.restore();
 }
@@ -712,6 +748,7 @@ export function drawCover(ctx, width, height, state, photos) {
   });
 
   applyGrade(ctx, width, height, grade, state.grade);
+  applySkyGlow(ctx, width, height, grade, state.grade);
   if (state.halftone) applyHalftone(ctx, width, height, state.grade);
   applyGrain(ctx, width, height, state.grain);
 

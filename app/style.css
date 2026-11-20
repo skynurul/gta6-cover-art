@@ -134,6 +134,15 @@ body {
 .half.checks { display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; padding-bottom: 2px; }
 .blurb { margin: 8px 0 0; color: #c9a3b4; font-size: 13px; }
 
+/* Per-panel crop controls: the two pan sliders sit side by side, and
+   the face-aware button takes the accent colour so it reads as the
+   one-click fix. */
+.crop-row { display: flex; gap: 12px; }
+.crop-row .slider-label { font-size: 12px; }
+.crop-btns { margin-top: 10px; }
+.crop-btns button { flex: 1 1 0; }
+.face-btn { background: #7a1030; border-color: #ff2e88; }
+
 button {
   font: inherit;
   font-weight: 700;

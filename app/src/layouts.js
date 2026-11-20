@@ -1,4 +1,4 @@
-// Poster layouts for Vice Cover Studio, round 2.
+// Poster layouts for Vice Cover Studio, round 3.
 //
 // The layout language follows the top-50 covers of the bounty: slanted
 // panels with thin gold borders, a big centre hero panel that pops out
@@ -13,6 +13,11 @@
 //           panel's own width (0 = straight). Neighbours slant opposite
 //           ways so their shared edge is one clean diagonal.
 //   hero  — drawn last, on top of its neighbours, with a drop shadow.
+//
+// Round 3 adds the cast order: roleRanks() ranks panels for the auto
+// cast tag — the hero is the lead (rank 0), the rest follow in reading
+// order (top row first, left to right), so a tag follows a panel's
+// position on the poster rather than the order it was picked in.
 export const LAYOUTS = {
   cast: {
     id: 'cast',
@@ -88,6 +93,35 @@ export const LAYOUT_IDS = Object.keys(LAYOUTS);
 
 export function layoutById(id) {
   return LAYOUTS[id] || LAYOUTS.cast;
+}
+
+// Index of the layout's hero panel, or -1 when no panel is the hero
+// (Hero Split and Triple Strip have no hero flag; the first panel is
+// the biggest there, but the cast tag treats every panel alike).
+export function heroIndex(layoutId) {
+  return layoutById(layoutId).panels.findIndex((p) => p.hero);
+}
+
+// Cast rank of every panel: the hero is rank 0 (the lead), the rest
+// follow in reading order — top row first, left to right within a row.
+// The auto cast tag hands out a photo's roles in this order, so the
+// hero always gets the lead role and the top-left panel the next one.
+export function roleRanks(layoutId) {
+  const layout = layoutById(layoutId);
+  const ranks = new Array(layout.panels.length).fill(0);
+  const hero = layout.panels.findIndex((p) => p.hero);
+  const rest = layout.panels.map((p, i) => i).filter((i) => i !== hero);
+  rest.sort((a, b) => {
+    const pa = layout.panels[a];
+    const pb = layout.panels[b];
+    if (pa.y !== pb.y) return pa.y - pb.y;
+    return pa.x - pb.x;
+  });
+  if (hero >= 0) ranks[hero] = 0;
+  rest.forEach((i, k) => {
+    ranks[i] = (hero >= 0 ? 1 : 0) + k;
+  });
+  return ranks;
 }
 
 // Draw order: panels in array order, except the hero, which is drawn
