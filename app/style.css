@@ -12,6 +12,13 @@
   font-display: swap;
   src: url('fonts/BebasNeue.woff2') format('woff2');
 }
+@font-face {
+  font-family: 'Pacifico';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/Pacifico.woff2') format('woff2');
+}
 
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
@@ -73,6 +80,12 @@ body {
   font: inherit;
 }
 .hint { color: #c9a3b4; font-size: 13px; }
+.surprise {
+  margin-left: auto;
+  background: #7a2b12;
+  border-color: #ff9a3d;
+  font-size: 14px;
+}
 .canvas-wrap {
   background: #0a0408;
   border: 1px solid #3d1226;
@@ -94,7 +107,7 @@ body {
 .status { color: #ffd9a0; min-height: 1.4em; margin: 10px 2px 0; }
 
 .panel {
-  flex: 0 0 330px;
+  flex: 0 0 340px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -115,6 +128,10 @@ body {
 .group h3 { margin: 12px 0 6px; font-size: 13px; color: #c9a3b4; }
 .row { display: flex; gap: 8px; }
 .row.wrap { flex-wrap: wrap; }
+.row.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); }
+.row.grid3 button { font-size: 13px; padding: 8px 6px; }
+.half { flex: 1 1 0; min-width: 0; }
+.half.checks { display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; padding-bottom: 2px; }
 .blurb { margin: 8px 0 0; color: #c9a3b4; font-size: 13px; }
 
 button {
@@ -141,10 +158,18 @@ button.active { background: #ff2e88; border-color: #ff2e88; color: #fff; }
   margin: 10px 0 4px;
 }
 .field-label span, .slider-label span { color: #ffd9a0; }
-input[type="text"], input[type="range"] { width: 100%; }
+input[type="text"], input[type="range"], select { width: 100%; }
 input[type="text"] {
   font: inherit;
   padding: 8px 10px;
+  border-radius: 7px;
+  border: 1px solid #6b2340;
+  background: #14090f;
+  color: #f5ead9;
+}
+select {
+  font: inherit;
+  padding: 7px 8px;
   border-radius: 7px;
   border: 1px solid #6b2340;
   background: #14090f;

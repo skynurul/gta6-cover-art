@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vice Cover Studio — GTA 6-style cover art maker</title>
+<title>Vice Cover Studio — movie-poster covers with cast tags, seal &amp; billing block</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -13,7 +13,7 @@
     <div class="brand">
       <span class="brand-mark">VICE</span>
       <span class="brand-name">Cover Studio</span>
-      <span class="brand-sub">GTA 6-style cover art maker · works offline</span>
+      <span class="brand-sub">Movie-poster covers · cast tags, seal &amp; billing block · 6 layouts, 6 grades · works offline</span>
     </div>
     <div class="steps">1 · Pick photos &nbsp;→&nbsp; 2 · Pick a layout &nbsp;→&nbsp; 3 · Export PNG</div>
   </header>
@@ -28,6 +28,7 @@
           <option value="1920x1080">1920 × 1080 (landscape)</option>
         </select>
         <span class="hint">Click a panel to pick it · drag to move the photo · scroll to zoom</span>
+        <button type="button" id="surpriseBtn" class="surprise">🎲 Surprise me</button>
       </div>
       <div class="canvas-wrap">
         <canvas id="preview" width="1080" height="1080"></canvas>
@@ -38,12 +39,15 @@
     <aside class="panel">
       <section class="group">
         <h2>Layout</h2>
-        <div id="layoutRow" class="row">
-          <button type="button" data-layout="hero" class="active">Hero Split</button>
+        <div id="layoutRow" class="row grid3">
+          <button type="button" data-layout="cast" class="active">Poster Cast</button>
+          <button type="button" data-layout="popout">Pop-Out Hero</button>
+          <button type="button" data-layout="slant">Slanted Cast</button>
+          <button type="button" data-layout="hero">Hero Split</button>
           <button type="button" data-layout="strip">Triple Strip</button>
           <button type="button" data-layout="duo">Neon Duo</button>
         </div>
-        <p id="layoutBlurb" class="blurb">One big hero photo, two smaller panels below.</p>
+        <p id="layoutBlurb" class="blurb">Six slanted panels, one pop-out hero — the movie-poster cast.</p>
       </section>
 
       <section class="group">
@@ -53,31 +57,82 @@
         <div id="photoList" class="row wrap"></div>
         <button type="button" id="uploadBtn" class="upload">+ Add your own photo…</button>
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
+        <label class="field-label" for="roleInput">Role tag</label>
+        <input type="text" id="roleInput" value="THE CAPTAIN" maxlength="24">
+        <label class="field-label" for="roleSubInput">Role sub-line (place · time · note)</label>
+        <input type="text" id="roleSubInput" value="PIER 9 · 6:40 PM · FIRST CAST" maxlength="64">
         <label class="slider-label" for="zoomRange">Zoom <span id="zoomValue">1.15×</span></label>
         <input type="range" id="zoomRange" min="1" max="3" step="0.01" value="1.15">
       </section>
 
       <section class="group">
-        <h2>Caption</h2>
-        <label class="field-label" for="capInput">Main caption</label>
+        <h2>Title</h2>
+        <label class="field-label" for="capInput">Giant title</label>
         <input type="text" id="capInput" value="Sunset Heist" maxlength="48">
-        <label class="field-label" for="subInput">Subtitle</label>
-        <input type="text" id="subInput" value="VICE CITY • 2026" maxlength="64">
-        <label class="slider-label" for="capSize">Caption size <span id="capSizeValue">1.00×</span></label>
+        <label class="field-label" for="subInput">Neon script subtitle</label>
+        <input type="text" id="subInput" value="chasing golden hour" maxlength="64">
+        <label class="slider-label" for="capSize">Title size <span id="capSizeValue">1.00×</span></label>
         <input type="range" id="capSize" min="0.7" max="1.4" step="0.01" value="1">
-        <div class="row">
-          <button type="button" data-cap-pos="bottom" class="active">Caption at bottom</button>
-          <button type="button" data-cap-pos="top">Caption at top</button>
-        </div>
       </section>
 
       <section class="group">
-        <h2>Sunset grade</h2>
-        <label class="slider-label" for="gradeRange">Neon sunset <span id="gradeValue">80%</span></label>
+        <h2>Grade</h2>
+        <div id="gradeRow" class="row grid3">
+          <button type="button" data-grade="sunset" class="active">Sunset</button>
+          <button type="button" data-grade="neon">Neon Night</button>
+          <button type="button" data-grade="golden">Golden Hour</button>
+          <button type="button" data-grade="noir">Vice Noir</button>
+          <button type="button" data-grade="palm">Palm Pink</button>
+          <button type="button" data-grade="heatwave">Heatwave</button>
+        </div>
+        <p id="gradeBlurb" class="blurb">Magenta-orange dusk, teal shadows — the Vice City grade.</p>
+        <label class="slider-label" for="gradeRange">Grade strength <span id="gradeValue">80%</span></label>
         <input type="range" id="gradeRange" min="0" max="1" step="0.01" value="0.8">
         <label class="slider-label" for="grainRange">Film grain <span id="grainValue">50%</span></label>
         <input type="range" id="grainRange" min="0" max="1" step="0.01" value="0.5">
         <label class="check"><input type="checkbox" id="halftoneCheck" checked> Halftone dots in the sky</label>
+        <label class="check"><input type="checkbox" id="inkCheck"> Poster Ink (painted, high-contrast photos)</label>
+      </section>
+
+      <section class="group">
+        <h2>Poster furniture</h2>
+        <label class="check"><input type="checkbox" id="furnitureCheck" checked> Show poster furniture</label>
+        <label class="field-label" for="quoteInput">Press quote</label>
+        <input type="text" id="quoteInput" value="SUNSET, CRIME AND SALT AIR" maxlength="64">
+        <label class="field-label" for="quoteSourceInput">Quote source</label>
+        <input type="text" id="quoteSourceInput" value="THE COAST GAZETTE" maxlength="48">
+        <label class="field-label" for="taglineInput">Tagline</label>
+        <input type="text" id="taglineInput" value="ONE PIER · ONE BOULEVARD · NO WAY BACK" maxlength="64">
+        <label class="field-label" for="billingInput">Billing block</label>
+        <input type="text" id="billingInput" value="A VICE COVER PICTURES PRODUCTION · STARRING YOU · SHOT ON YOUR OWN CAMERA · GRADED BY HAND" maxlength="160">
+        <div class="row">
+          <div class="half">
+            <label class="field-label" for="volInput">Volume badge</label>
+            <input type="text" id="volInput" value="VOL. 01" maxlength="12">
+          </div>
+          <div class="half">
+            <label class="field-label" for="releaseSelect">Release chip</label>
+            <select id="releaseSelect">
+              <option value="COMING SOON" selected>COMING SOON</option>
+              <option value="NOW SHOWING">NOW SHOWING</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="half">
+            <label class="field-label" for="heatSelect">Heat meter</label>
+            <select id="heatSelect">
+              <option value="0">No meter</option>
+              <option value="3">★★★☆☆</option>
+              <option value="4" selected>★★★★☆</option>
+              <option value="5">★★★★★</option>
+            </select>
+          </div>
+          <div class="half checks">
+            <label class="check"><input type="checkbox" id="sealCheck" checked> Gold seal</label>
+            <label class="check"><input type="checkbox" id="barcodeCheck" checked> Barcode</label>
+          </div>
+        </div>
       </section>
 
       <section class="group">
