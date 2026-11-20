@@ -1,23 +1,102 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cover Snap</title>
-<link rel="stylesheet" href="./style.css">
+<title>Vice Cover Studio — GTA 6-style cover art maker</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main class="app">
-  <section class="controls">
-    <h1>Cover Snap</h1>
-    <p>A photo and a caption, made into a square cover.</p>
-    <label>Photo <input id="photo" type="file" accept="image/*"></label>
-    <label>Caption <input id="caption" type="text" maxlength="40" value="Sunset Heist"></label>
-    <button id="export" type="button">Export PNG 1080 x 1080</button>
-    <p id="status" role="status"></p>
-  </section>
-  <canvas id="cover" width="1080" height="1080" aria-label="The cover"></canvas>
-</main>
-<script type="module" src="./src/main.js"></script>
+<div id="editor">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">VICE</span>
+      <span class="brand-name">Cover Studio</span>
+      <span class="brand-sub">GTA 6-style cover art maker · works offline</span>
+    </div>
+    <div class="steps">1 · Pick photos &nbsp;→&nbsp; 2 · Pick a layout &nbsp;→&nbsp; 3 · Export PNG</div>
+  </header>
+
+  <main class="workbench">
+    <section class="stage">
+      <div class="stage-head">
+        <label for="previewSize">Preview size</label>
+        <select id="previewSize">
+          <option value="1080x1080" selected>1080 × 1080 (square)</option>
+          <option value="1080x1350">1080 × 1350 (portrait)</option>
+          <option value="1920x1080">1920 × 1080 (landscape)</option>
+        </select>
+        <span class="hint">Click a panel to pick it · drag to move the photo · scroll to zoom</span>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="preview" width="1080" height="1080"></canvas>
+      </div>
+      <p id="statusLine" class="status">Loading the sample photos…</p>
+    </section>
+
+    <aside class="panel">
+      <section class="group">
+        <h2>Layout</h2>
+        <div id="layoutRow" class="row">
+          <button type="button" data-layout="hero" class="active">Hero Split</button>
+          <button type="button" data-layout="strip">Triple Strip</button>
+          <button type="button" data-layout="duo">Neon Duo</button>
+        </div>
+        <p id="layoutBlurb" class="blurb">One big hero photo, two smaller panels below.</p>
+      </section>
+
+      <section class="group">
+        <h2>Panels</h2>
+        <div id="panelList" class="row wrap"></div>
+        <h3>Photo for the picked panel</h3>
+        <div id="photoList" class="row wrap"></div>
+        <button type="button" id="uploadBtn" class="upload">+ Add your own photo…</button>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+        <label class="slider-label" for="zoomRange">Zoom <span id="zoomValue">1.15×</span></label>
+        <input type="range" id="zoomRange" min="1" max="3" step="0.01" value="1.15">
+      </section>
+
+      <section class="group">
+        <h2>Caption</h2>
+        <label class="field-label" for="capInput">Main caption</label>
+        <input type="text" id="capInput" value="Sunset Heist" maxlength="48">
+        <label class="field-label" for="subInput">Subtitle</label>
+        <input type="text" id="subInput" value="VICE CITY • 2026" maxlength="64">
+        <label class="slider-label" for="capSize">Caption size <span id="capSizeValue">1.00×</span></label>
+        <input type="range" id="capSize" min="0.7" max="1.4" step="0.01" value="1">
+        <div class="row">
+          <button type="button" data-cap-pos="bottom" class="active">Caption at bottom</button>
+          <button type="button" data-cap-pos="top">Caption at top</button>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2>Sunset grade</h2>
+        <label class="slider-label" for="gradeRange">Neon sunset <span id="gradeValue">80%</span></label>
+        <input type="range" id="gradeRange" min="0" max="1" step="0.01" value="0.8">
+        <label class="slider-label" for="grainRange">Film grain <span id="grainValue">50%</span></label>
+        <input type="range" id="grainRange" min="0" max="1" step="0.01" value="0.5">
+        <label class="check"><input type="checkbox" id="halftoneCheck" checked> Halftone dots in the sky</label>
+      </section>
+
+      <section class="group">
+        <h2>Export PNG</h2>
+        <div id="exportRow" class="row wrap">
+          <button type="button" data-size="1080x1080">1080 × 1080</button>
+          <button type="button" data-size="1080x1350">1080 × 1350</button>
+          <button type="button" data-size="1920x1080">1920 × 1080</button>
+        </div>
+        <p class="blurb">The PNG is rendered on your machine — your photos never leave it.</p>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<div id="coverWrap" hidden>
+  <canvas id="coverCanvas"></canvas>
+</div>
+
+<script type="module" src="src/app.js"></script>
 </body>
 </html>
